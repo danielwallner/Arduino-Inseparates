@@ -2,6 +2,10 @@
 
 // Command line host application for easier debugging in source-level debuggers.
 
+#define INS_DEBUGGING 1
+#define INS_ENABLE_INPUT_FILTER 1
+#define INS_UART_FRACTIONAL_TIME 1
+
 #include "../src/ProtocolUART.h"
 #include "../src/DebugUtils.h"
 
@@ -42,7 +46,8 @@ void runUART(RxUART &uart, uint8_t pin)
 			uint8_t pinValue = g_digitalWriteStateLog[pin][i];
 			uint16_t timeValue = g_digitalWriteTimeLog[pin][i];
 			printf("%d %d\n", int(pinValue), int(timeValue));
-			uart.inputChanged(pinValue, timeValue);
+			if (timeValue)
+				uart.Decoder_pulse(1 ^ pinValue, timeValue);
 		}
 	}
 }
@@ -53,24 +58,24 @@ int main()
 		DebugPrinter printer;
 
 		printer.print("hej");
-		printer.SteppedTask_step(0);
-		printer.SteppedTask_step(0);
+		printer.SteppedTask_step();
+		printer.SteppedTask_step();
 		printer.println("hopp");
 		printer.flush();
 
-		printer.SteppedTask_step(0);
-		printer.SteppedTask_step(0);
+		printer.SteppedTask_step();
+		printer.SteppedTask_step();
 		printer.print("hej");
 		printer.println("hopp");
-		printer.SteppedTask_step(0);
-		printer.SteppedTask_step(0);
+		printer.SteppedTask_step();
+		printer.SteppedTask_step();
 
-		printer.SteppedTask_step(0);
-		printer.SteppedTask_step(0);
+		printer.SteppedTask_step();
+		printer.SteppedTask_step();
 
 		printer.print("hej");
-		printer.SteppedTask_step(0);
-		printer.SteppedTask_step(0);
+		printer.SteppedTask_step();
+		printer.SteppedTask_step();
 		printer.println("hopp");
 		printer.flush();
 	}
@@ -110,7 +115,7 @@ int main()
 
 		Delegate delegate;
 
-		RxUART rxUART(pin, HIGH, &delegate);
+		RxUART rxUART(HIGH, &delegate);
 		rxUART.setBaudrate(10000);
 
 		uint16_t startDelay = 4321;
@@ -121,11 +126,11 @@ int main()
 		tx1.setBaudrate(10000);
 		tx1.prepare(data);
 		Scheduler::run(&tx1);
-		for (unsigned i = 0; i < g_digitalWriteStateLog[pin].size(); i++)
+		for (unsigned i = 1; i < g_digitalWriteStateLog[pin].size(); i++)
 		{
-			rxUART.inputChanged(g_digitalWriteStateLog[pin][i], g_digitalWriteTimeLog[pin][i]);
+			 rxUART.Decoder_pulse(1 ^ g_digitalWriteStateLog[pin][i], g_digitalWriteTimeLog[pin][i]);
 		}
-		rxUART.inputChanged(false, totalDelay() - g_lastWrite[pin], false);
+		rxUART.Decoder_timeout(g_digitalWriteStateLog[pin].back());
 		assert(1000 + startDelay ==  totalDelay());
 		assert(data = delegate.receivedData.back());
 
@@ -140,9 +145,9 @@ int main()
 		Scheduler::run(&tx1);
 		for (unsigned i = 0; i < g_digitalWriteStateLog[pin].size(); i++)
 		{
-			rxUART.inputChanged(g_digitalWriteStateLog[pin][i], g_digitalWriteTimeLog[pin][i]);
+			rxUART.Decoder_pulse(1 ^ g_digitalWriteStateLog[pin][i], g_digitalWriteTimeLog[pin][i]);
 		}
-		rxUART.inputChanged(false, 100 * (1 + 5 + 1 + 1) - (g_lastWrite[pin] - startDelay), false);
+		rxUART.Decoder_timeout(g_digitalWriteStateLog[pin].back());
 		assert(100 * (1 + 5 + 1 + 6) + startDelay == totalDelay());
 		assert(data == delegate.receivedData.back());
 
@@ -157,9 +162,9 @@ int main()
 		Scheduler::run(&tx1);
 		for (unsigned i = 0; i < g_digitalWriteStateLog[pin].size(); i++)
 		{
-			rxUART.inputChanged(g_digitalWriteStateLog[pin][i], g_digitalWriteTimeLog[pin][i]);
+			rxUART.Decoder_pulse(1 ^ g_digitalWriteStateLog[pin][i], g_digitalWriteTimeLog[pin][i]);
 		}
-		rxUART.inputChanged(false, 100 * (1 + 8 + 1 + 2) - (g_lastWrite[pin] - startDelay), false);
+		rxUART.Decoder_timeout(g_digitalWriteStateLog[pin].back());
 		assert(1200 + startDelay == totalDelay());
 		assert(data == delegate.receivedData.back());
 
@@ -171,9 +176,9 @@ int main()
 		Scheduler::run(&tx1);
 		for (unsigned i = 0; i < g_digitalWriteStateLog[pin].size(); i++)
 		{
-			rxUART.inputChanged(g_digitalWriteStateLog[pin][i], g_digitalWriteTimeLog[pin][i]);
+			rxUART.Decoder_pulse(1 ^ g_digitalWriteStateLog[pin][i], g_digitalWriteTimeLog[pin][i]);
 		}
-		rxUART.inputChanged(false, 100 * (1 + 8 + 1 + 1) - (g_lastWrite[pin] - startDelay), false);
+		rxUART.Decoder_timeout(g_digitalWriteStateLog[pin].back());
 		assert(1200 + startDelay == totalDelay());
 		assert(data == delegate.receivedData.back());
 
@@ -188,9 +193,9 @@ int main()
 		Scheduler::run(&tx1);
 		for (unsigned i = 0; i < g_digitalWriteStateLog[pin].size(); i++)
 		{
-			rxUART.inputChanged(g_digitalWriteStateLog[pin][i], g_digitalWriteTimeLog[pin][i]);
+			rxUART.Decoder_pulse(1 ^ g_digitalWriteStateLog[pin][i], g_digitalWriteTimeLog[pin][i]);
 		}
-		rxUART.inputChanged(false, 100 * (1 + 5 + 1 + 1) - (g_lastWrite[pin] - startDelay), false);
+		rxUART.Decoder_timeout(g_digitalWriteStateLog[pin].back());
 		assert(100 * (1 + 5 + 1 + 6) + startDelay == totalDelay());
 		assert(0x1F == delegate.receivedData.back());
 	}
@@ -201,7 +206,7 @@ int main()
 		uint16_t uartStartDelay = 1234;
 		uint8_t pin = 7;
 		uint32_t baudRate = 230400;
-		RxUART rxUART(pin, HIGH, &delegate);
+		RxUART rxUART(HIGH, &delegate);
 		rxUART.setBaudrate(baudRate);
 
 		uint8_t data = 0x81;
@@ -217,7 +222,7 @@ int main()
 		Scheduler::run(&tx1);
 		runUART(rxUART, pin);
 		assert(delegate.receivedData.size() && delegate.receivedData[0] == 0x81);
-		rxUART.inputChanged(false, 1000);
+		rxUART.Decoder_timeout(g_digitalWriteStateLog[pin].back());
 		assert(delegate.receivedData.size() && delegate.receivedData.back() == data);
 		rxUART.reset();
 
@@ -228,10 +233,10 @@ int main()
 		tx1.prepare(data);
 		Scheduler::run(&tx1);
 		runUART(rxUART, pin);
-		rxUART.inputChanged(false, 1200);
+		rxUART.Decoder_timeout(g_digitalWriteStateLog[pin].back());
 		assert(delegate.receivedData.size() && delegate.receivedData.back() == data);
 
-		RxUART rxUART2(pin, HIGH, &delegate);
+		RxUART rxUART2(HIGH, &delegate);
 		rxUART2.setBaudrate(baudRate);
 		data = 0x5A;
 		resetLogs();
@@ -242,7 +247,7 @@ int main()
 		tx1.prepare(data);
 		Scheduler::run(&tx1);
 		runUART(rxUART2, pin);
-		rxUART2.inputChanged(false, 100);
+		rxUART2.Decoder_timeout(g_digitalWriteStateLog[pin].back());
 		assert(delegate.receivedData.size() && delegate.receivedData.back() == data);
 	}
 
@@ -279,12 +284,11 @@ int main()
 		uint16_t uartStartDelay = 4321;
 		uint8_t pin = 1;
 		uint32_t baudRate = 230400;
-		RxUART rxUART(pin, HIGH, &delegate);
+		RxUART rxUART(HIGH, &delegate);
 		rxUART.setBaudrate(baudRate);
 
 		uint8_t data = 0x81;
 		resetLogs();
-		digitalWrite(pin, HIGH);
 		delayMicroseconds(uartStartDelay);
 		TxUART tx1(pin, HIGH);
 		tx1.setBaudrate(baudRate);
@@ -293,7 +297,7 @@ int main()
 		tx1.prepare(data);
 		Scheduler::run(&tx1);
 		runUART(rxUART, pin);
-		rxUART.inputChanged(false, 100);
+		rxUART.Decoder_timeout(HIGH);
 		assert(delegate.parityError);
 		assert(!delegate.receivedData.size());
 	}
@@ -304,12 +308,11 @@ int main()
 		uint16_t uartStartDelay = 5678;
 		uint8_t pin = 4;
 		uint32_t baudRate = 230400;
-		RxUART rxUART(pin, baudRate, &delegate);
+		RxUART rxUART(HIGH, &delegate);
 		rxUART.setBaudrate(baudRate);
 
 		uint8_t data = 0x81;
 		resetLogs();
-		digitalWrite(pin, HIGH);
 		delayMicroseconds(uartStartDelay);
 		TxUART tx1(pin, HIGH);
 		tx1.setBaudrate(baudRate);
@@ -318,7 +321,7 @@ int main()
 		tx1.prepare(data);
 		Scheduler::run(&tx1);
 		runUART(rxUART, pin);
-		rxUART.inputChanged(false, 100);
+		rxUART.Decoder_timeout(g_digitalWriteStateLog[pin].back());
 		assert(delegate.receivedData.size() && delegate.receivedData.back() == data);
 	}
 
@@ -329,12 +332,11 @@ int main()
 		uint8_t pin = 4;
 		uint8_t bits = 3;
 		uint32_t baudRate = 230400;
-		RxUART rxUART(pin, HIGH, &delegate);
+		RxUART rxUART(HIGH, &delegate);
 		rxUART.setBaudrate(baudRate);
 
 		uint8_t data = 0x2;
 		resetLogs();
-		digitalWrite(pin, HIGH);
 		delayMicroseconds(uartStartDelay);
 		TxUART tx1(pin, HIGH);
 		tx1.setBaudrate(baudRate);
@@ -344,7 +346,7 @@ int main()
 		Scheduler::run(&tx1);
 		Scheduler::run(&tx1);
 		runUART(rxUART, pin);
-		rxUART.inputChanged(false, 150);
+		rxUART.Decoder_timeout(g_digitalWriteStateLog[pin].back());
 		assert(delegate.receivedData.size() == 2 &&
 			   delegate.receivedData[delegate.receivedData.size() - 2] == data &&
 			   delegate.receivedData.back() == data);
@@ -357,12 +359,11 @@ int main()
 		uint8_t pin = 4;
 		uint8_t bits = 8;
 		uint32_t baudRate = 300;
-		RxUART rxUART(pin, HIGH, &delegate);
+		RxUART rxUART(HIGH, &delegate);
 		rxUART.setBaudrate(baudRate);
 
 		uint8_t data = 0x2;
 		resetLogs();
-		digitalWrite(pin, HIGH);
 		delayMicroseconds(uartStartDelay);
 		TxUART tx1(pin, HIGH);
 		tx1.setBaudrate(baudRate);
@@ -371,7 +372,7 @@ int main()
 		tx1.prepare(data);
 		Scheduler::run(&tx1);
 		runUART(rxUART, pin);
-		rxUART.inputChanged(false, 30000);
+		rxUART.Decoder_timeout(g_digitalWriteStateLog[pin].back());
 		assert(delegate.receivedData.size() && delegate.receivedData.back() == data);
 	}
 
@@ -419,17 +420,15 @@ int main()
 
 		Delegate2 delegate;
 
-		RxUART rxUART(pin, HIGH, &delegate);
+		RxUART rxUART(HIGH, &delegate);
 		rxUART.setBaudrate(baudRate);
 		rxUART.setFormat(Parity::kOdd, bits);
 
-		scheduler.add(&rxUART);
-
-		//digitalWrite(pin, HIGH);
+		scheduler.add(&rxUART, pin);
 
 		for (int i = 0; delegate.receivedData.size() < 2; ++i)
 		{
-			scheduler.SteppedTask_step(micros());
+			scheduler.poll();
 			safeDelayMicros(10);
 			if (i == 10)
 			{

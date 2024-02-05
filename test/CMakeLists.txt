@@ -34,6 +34,7 @@ set(COMMON_SOURCES
 	../src/FastTime.h
 	../src/ProtocolUtils.h
 	../src/DebugUtils.h
+	../src/DebugUtils.cpp
 
 	../src/ProtocolBeo36.h
 	../src/ProtocolDatalink80.h

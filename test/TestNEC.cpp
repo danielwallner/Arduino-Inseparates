@@ -82,7 +82,7 @@ TEST(RxTest, NEC)
 
 	Delegate delegate(receivedData);
 
-	RxNEC necDecoder(pin, HIGH, &delegate);
+	RxNEC necDecoder(HIGH, &delegate);
 
 	uint16_t startDelay = 14321;
 	uint32_t data = 0x80000001;
@@ -95,7 +95,7 @@ TEST(RxTest, NEC)
 	Scheduler::run(&tx1);
 	for (unsigned i = 0; i < g_digitalWriteStateLog[pin].size(); i++)
 	{
-		necDecoder.inputChanged(g_digitalWriteStateLog[pin][i], g_digitalWriteTimeLog[pin][i]);
+		necDecoder.Decoder_pulse(1 ^ g_digitalWriteStateLog[pin][i], g_digitalWriteTimeLog[pin][i]);
 	}
 	EXPECT_EQ(data, receivedData);
 
@@ -107,7 +107,7 @@ TEST(RxTest, NEC)
 	Scheduler::run(&tx1);
 	for (unsigned i = 0; i < g_digitalWriteStateLog[pin].size(); i++)
 	{
-		necDecoder.inputChanged(g_digitalWriteStateLog[pin][i], g_digitalWriteTimeLog[pin][i]);
+		necDecoder.Decoder_pulse(1 ^ g_digitalWriteStateLog[pin][i], g_digitalWriteTimeLog[pin][i]);
 	}
 	EXPECT_EQ(data, receivedData);
 
@@ -119,7 +119,7 @@ TEST(RxTest, NEC)
 	Scheduler::run(&tx1);
 	for (unsigned i = 0; i < g_digitalWriteStateLog[pin].size(); i++)
 	{
-		necDecoder.inputChanged(g_digitalWriteStateLog[pin][i], g_digitalWriteTimeLog[pin][i]);
+		necDecoder.Decoder_pulse(1 ^ g_digitalWriteStateLog[pin][i], g_digitalWriteTimeLog[pin][i]);
 	}
 	EXPECT_EQ(data, receivedData);
 
@@ -131,7 +131,7 @@ TEST(RxTest, NEC)
 	Scheduler::run(&tx1);
 	for (unsigned i = 0; i < g_digitalWriteStateLog[pin].size(); i++)
 	{
-		necDecoder.inputChanged(g_digitalWriteStateLog[pin][i], g_digitalWriteTimeLog[pin][i]);
+		necDecoder.Decoder_pulse(1 ^ g_digitalWriteStateLog[pin][i], g_digitalWriteTimeLog[pin][i]);
 	}
 	EXPECT_EQ(data, receivedData);
 }

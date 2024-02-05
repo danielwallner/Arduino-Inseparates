@@ -70,7 +70,7 @@ TEST(RxTest, ESI)
 
 	Delegate delegate(receivedData);
 
-	RxESI esiDecoder(pin, HIGH, &delegate);
+	RxESI esiDecoder(HIGH, &delegate);
 
 	uint16_t startDelay = 4321;
 	uint32_t data = 0x8000001;
@@ -83,7 +83,7 @@ TEST(RxTest, ESI)
 	Scheduler::run(&tx1);
 	for (unsigned i = 0; i < g_digitalWriteStateLog[pin].size(); i++)
 	{
-		esiDecoder.inputChanged(g_digitalWriteStateLog[pin][i], g_digitalWriteTimeLog[pin][i]);
+		esiDecoder.Decoder_pulse(1 ^ g_digitalWriteStateLog[pin][i], g_digitalWriteTimeLog[pin][i]);
 	}
 	EXPECT_EQ(data, receivedData);
 
@@ -95,7 +95,7 @@ TEST(RxTest, ESI)
 	Scheduler::run(&tx1);
 	for (unsigned i = 0; i < g_digitalWriteStateLog[pin].size(); i++)
 	{
-		esiDecoder.inputChanged(g_digitalWriteStateLog[pin][i], g_digitalWriteTimeLog[pin][i]);
+		esiDecoder.Decoder_pulse(1 ^ g_digitalWriteStateLog[pin][i], g_digitalWriteTimeLog[pin][i]);
 	}
 	EXPECT_EQ(data, receivedData);
 
@@ -107,7 +107,7 @@ TEST(RxTest, ESI)
 	Scheduler::run(&tx1);
 	for (unsigned i = 0; i < g_digitalWriteStateLog[pin].size(); i++)
 	{
-		esiDecoder.inputChanged(g_digitalWriteStateLog[pin][i], g_digitalWriteTimeLog[pin][i]);
+		esiDecoder.Decoder_pulse(1 ^ g_digitalWriteStateLog[pin][i], g_digitalWriteTimeLog[pin][i]);
 	}
 	EXPECT_EQ(data, receivedData);
 
@@ -119,7 +119,7 @@ TEST(RxTest, ESI)
 	Scheduler::run(&tx1);
 	for (unsigned i = 0; i < g_digitalWriteStateLog[pin].size(); i++)
 	{
-		esiDecoder.inputChanged(g_digitalWriteStateLog[pin][i], g_digitalWriteTimeLog[pin][i]);
+		esiDecoder.Decoder_pulse(1 ^ g_digitalWriteStateLog[pin][i], g_digitalWriteTimeLog[pin][i]);
 	}
 	EXPECT_EQ(data, receivedData);
 }

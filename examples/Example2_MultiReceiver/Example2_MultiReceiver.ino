@@ -1,6 +1,6 @@
 // Copyright (c) 2024 Daniel Wallner
 
-// Concurrent receive of different protocols on different pins.
+// Demo with concurrent reception of different protocols on different pins.
 
 #define INS_FAST_TIME 1
 #define DEBUG_FULL_TIMING 0
@@ -20,15 +20,15 @@
 #include <ProtocolSIRC.h>
 #include <ProtocolTechnicsSC.h>
 
-const uint16_t kBeo36RecvPin = 4;
-const uint16_t kDatalink80RecvPin = 10;
-const uint16_t kDatalink86RecvPin = 10;
-const uint16_t kESIRecvPin = 10;
-const uint16_t kNECRecvPin = 10;
-const uint16_t kRC5RecvPin = 10;
-const uint16_t kSIRCRecvPin = 10;
-const uint16_t kTechnicsSCDataPin = 3;
-const uint16_t kTechnicsSCClockPin = 2;
+const uint16_t kBeo36RecvPin = D4;
+const uint16_t kDatalink80RecvPin = D5;
+const uint16_t kDatalink86RecvPin = D6;
+const uint16_t kESIRecvPin = D7;
+const uint16_t kNECRecvPin = D8;
+const uint16_t kRC5RecvPin = D9;
+const uint16_t kSIRCRecvPin = D10;
+const uint16_t kTechnicsSCDataPin = D2;
+const uint16_t kTechnicsSCClockPin = D3;
 
 using namespace inseparates;
 
@@ -40,6 +40,7 @@ TimeAccumulator tAcc;
 CycleChecker cCheck;
 #endif
 
+Timekeeper timekeeper;
 Scheduler scheduler;
 
 void InsError(uint32_t error)
@@ -50,7 +51,7 @@ void InsError(uint32_t error)
   Serial.print("ERROR: ");
   Serial.println(errorMsg);
   Serial.flush();
-  for(;;);
+  for(;;) yield();
 }
 
 class Delegate :
@@ -132,13 +133,13 @@ public:
 
 Delegate delegate;
 
-RxBeo36 beo36Decoder(kBeo36RecvPin, LOW, &delegate);
-RxDatalink80 datalink80Decoder(kDatalink80RecvPin, LOW, &delegate);
-RxDatalink86 datalink86Decoder(kDatalink86RecvPin, LOW, &delegate);
-RxESI esiDecoder(kESIRecvPin, LOW, &delegate);
-RxNEC necDecoder(kNECRecvPin, LOW, &delegate);
-RxRC5 rc5Decoder(kRC5RecvPin, LOW, &delegate);
-RxSIRC sircDecoder(kSIRCRecvPin, LOW, &delegate);
+RxBeo36 beo36Decoder(LOW, &delegate);
+RxDatalink80 datalink80Decoder(LOW, &delegate);
+RxDatalink86 datalink86Decoder(LOW, &delegate);
+RxESI esiDecoder(LOW, &delegate);
+RxNEC necDecoder(LOW, &delegate);
+RxRC5 rc5Decoder(LOW, &delegate);
+RxSIRC sircDecoder(LOW, &delegate);
 RxTechnicsSC technicsDecoder(kTechnicsSCDataPin, kTechnicsSCClockPin, LOW, &delegate);
 
 void setup()
@@ -148,8 +149,7 @@ void setup()
   while (!Serial)
     delay(50);
 
-  Serial.println();
-  Serial.print("B&O Early input pin: ");
+  Serial.print("B&O 36 input pin: ");
   Serial.println(kBeo36RecvPin);
   Serial.print("Datalink 80 input pin: ");
   Serial.println(kDatalink80RecvPin);
@@ -175,22 +175,22 @@ void setup()
 #endif
 
 #if !AVR
-  // AVR cannot handle all protocols at the same time.
-  scheduler.add(&beo36Decoder);
-  scheduler.add(&datalink80Decoder);
-  scheduler.add(&datalink86Decoder);
-  scheduler.add(&esiDecoder);
+  // AVR cannot reliably handle all protocols at the same time.
+  scheduler.add(&beo36Decoder, kBeo36RecvPin);
+  scheduler.add(&datalink80Decoder, kDatalink80RecvPin);
+  scheduler.add(&datalink86Decoder, kDatalink86RecvPin);
+  scheduler.add(&esiDecoder, kESIRecvPin);
   scheduler.add(&technicsDecoder);
 #endif
-  scheduler.add(&necDecoder);
-  scheduler.add(&rc5Decoder);
-  scheduler.add(&sircDecoder);
+  scheduler.add(&necDecoder, kNECRecvPin);
+  scheduler.add(&rc5Decoder, kRC5RecvPin);
+  scheduler.add(&sircDecoder, kSIRCRecvPin);
 }
 
 void loop()
 {
-  // On AVR fastMicros() has microsecond resolution and micros() resolution is 4 microseconds.
-  uint32_t now = fastMicros();
+  // On AVR fastMicros() has microsecond resolution and the resolution of micros() is 4 microseconds.
+  uint16_t now = fastMicros();
 
 #if DEBUG_FULL_TIMING
   TimeInserter tInserter(tAcc, now);
@@ -204,25 +204,20 @@ void loop()
 #if DEBUG_DRY_TIMING
   // Not completely dry as we need to poll the printer.
   if (!printer.empty())
-    printer.SteppedTask_step(now);
+    printer.SteppedTask_step();
 #else
-  scheduler.SteppedTask_step(now);
+  scheduler.poll();
 #endif
 
-#if DEBUG_FULL_TIMING
-  static uint32_t lastReport1;
-  if (now - lastReport1 >= 5000000)
+  if (timekeeper.secondsSinceReset(now) < 5)
   {
-    lastReport1 = now;
-    tAcc.report(printer);
+    return;
   }
+  timekeeper.reset();
+#if DEBUG_FULL_TIMING
+  tAcc.report(printer);
 #endif
 #if DEBUG_CYCLE_TIMING
-  static uint32_t lastReport2;
-  if (now - lastReport2 >= 5010000)
-  {
-    lastReport2 = now;
-    cCheck.report(printer);
-  }
+  cCheck.report(printer);
 #endif
 }

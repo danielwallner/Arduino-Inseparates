@@ -12,6 +12,7 @@
 // Connecting an RC-5 I/O to a normal IR I/O will likely destroy at least one of them!
 
 #include "ProtocolUtils.h"
+#include "DebugUtils.h"
 
 namespace inseparates
 {
@@ -24,12 +25,12 @@ class TxRC5 : public SteppedTask
 
 	uint16_t _data;
 	PinWriter *_pin;
-	uint8_t _markVal;
+	uint8_t _mark;
 	uint8_t _count;
-	uint32_t _startMicros;
+	uint32_t _microsAccumulator;
 public:
-	TxRC5(PinWriter *pin, uint8_t markVal) :
-		_pin(pin), _markVal(markVal), _count(-1)
+	TxRC5(PinWriter *pin, uint8_t mark) :
+		_pin(pin), _mark(mark), _count(-1)
 	{
 	}
 
@@ -43,26 +44,26 @@ public:
 	static inline uint16_t encodeRC5(uint8_t toggle, uint8_t address, uint8_t command) { return (uint16_t(0xC0 | (toggle << 5) | address) << 6) | command; }
 	static inline uint16_t encodeRC5X(uint8_t toggle, uint8_t address, uint8_t command) { return (uint16_t(0x80 | (command & 0x40) | (toggle << 5) | address) << 6) | (command & 0x3F); }
 
-	uint16_t SteppedTask_step(uint32_t now) override
+	uint16_t SteppedTask_step() override
 	{
 		++_count;
-		if (_count <= 1) // Will be wrong for start bit == 0 but simplifies the logic
+		if (_count <= 1) // Will be wrong for start bit == 0 but simplifies the logic.
 		{
-			_startMicros = now;
+			_microsAccumulator = 0;
 		}
 		if (_count > 28)
 		{
-			return idleTimeLeft(now);
+			return idleTimeLeft();
 		}
 		uint8_t bitnum = 13 - (_count >> 1);
 		bool bitVal = _count < 28 ? (_data >> bitnum) & 1 : true;
 		bool bitBoundry = !(_count & 1);
 		bool value = bitVal ^ bitBoundry;
-		_pin->write(value ? _markVal : 1 ^ _markVal);
+		_pin->write(value ? _mark : 1 ^ _mark);
 		if ((!value && _count == 27) || _count == 28)
 		{
 			_count = 28;
-			return idleTimeLeft(now);
+			return idleTimeLeft();
 		}
 		if (!bitBoundry && _count < 27)
 		{
@@ -70,29 +71,32 @@ public:
 			if (bitVal != nextBitVal)
 			{
 				++_count;
+				_microsAccumulator += kStepMicros << 1;
 				return kStepMicros << 1;
 			}
 		}
+		_microsAccumulator += kStepMicros;
 		return kStepMicros;
 	}
 
 private:
-	uint16_t idleTimeLeft(uint32_t now)
+	uint16_t idleTimeLeft()
 	{
-		int32_t microsUntilRepeat = kRepeatInterval - (now - _startMicros);
+		int32_t microsUntilRepeat = kRepeatInterval - _microsAccumulator;
 		if (microsUntilRepeat <= 0)
 		{
 			prepare(_data);
-			return Scheduler::kInvalidDelta;
+			return SteppedTask::kInvalidDelta;
 		}
-		if (microsUntilRepeat > Scheduler::kMaxSleepMicros)
-			return Scheduler::kMaxSleepMicros;
+		if (microsUntilRepeat > SteppedTask::kMaxSleepMicros)
+			microsUntilRepeat = SteppedTask::kMaxSleepMicros;
+		_microsAccumulator += microsUntilRepeat;
 		return microsUntilRepeat;
 	}
 };
 
 // Does not handle a zero start bit (which is not valid RC-5)
-class RxRC5 : public SteppedTask
+class RxRC5 : public Decoder
 {
 public:
 	class Delegate
@@ -102,86 +106,82 @@ public:
 	};
 
 private:
-	InputFilter _inputHandler;
-	uint8_t _pin;
-	uint8_t _markVal;
+	static const uint16_t kTimeout = 3 * TxRC5::kStepMicros;
+
+	uint8_t _mark;
 	Delegate *_delegate;
 	uint16_t _data;
-	bool _state;
-	uint8_t _bitCount;
-	bool _atBitBoundry;
+	uint8_t _count;
 
 public:
-	RxRC5(uint8_t pin, uint8_t markVal, Delegate *delegate) :
-		_pin(pin), _markVal(markVal), _delegate(delegate)
+	RxRC5(uint8_t mark, Delegate *delegate) :
+		_mark(mark), _delegate(delegate)
 	{
 		reset();
 	}
 
 	void reset()
 	{
-		_data = 0;
-		_state = false;
-		_bitCount = 0;
-		_atBitBoundry = false;
+		_count = -1;
 	}
 
-	uint16_t SteppedTask_step(uint32_t now) override
+	void Decoder_timeout(uint8_t /*pinState*/) override
 	{
-		uint8_t pinValue = digitalRead(_pin);
-		if (!_inputHandler.setState(pinValue == _markVal))
+		if (_count == uint8_t(-1))
 		{
-			if (_bitCount != 0 && _inputHandler.getTimeSinceLastTransition(now) > uint32_t(TxRC5::kStepMicros) * 4)
-			{
-				reset();
-			}
-			return 40;
-		}
-		// Input has changed.
-		bool state = _inputHandler.getPinState();
-		uint16_t pulseLength = _inputHandler.getAndUpdateTimeSinceLastTransition(now);
-		inputChanged(state, pulseLength);
-		return 40;
-	}
-
-	void inputChanged(bool pinState, uint16_t pulseTime)
-	{
-		if (!_atBitBoundry && _bitCount == 0)
-		{
-			// Wait for mark.
-			if (!pinState)
-			{
-				return;
-			}
-		}
-
-		_state = pinState;
-
-		uint8_t steps = !_bitCount || validatePulseWidth(pulseTime) ? 1 : 0;
-
-		if (steps == 0 &&
-			!(_atBitBoundry && (steps = (validatePulseWidth(pulseTime >> 1) ? 2 : 0))))
-		{
-			reset();
+			INS_ASSERT(0);
 			return;
 		}
 
-		if (!_atBitBoundry || steps == 2)
+		reset();
+	}
+
+	uint16_t Decoder_pulse(uint8_t pulseState, uint16_t pulseWidth) override
+	{
+		bool mark = pulseState == _mark;
+		if (_count == uint8_t(-1))
 		{
-			_data <<= 1;
-			_data |= pinState ? 1 : 0;
-			++_bitCount;
+			// Wait for mark.
+			if (!mark)
+			{
+				return Decoder::kInvalidTimeout;
+			}
+			_data = 0x1;
+			++_count;
 		}
 
-		if (steps != 2)
-			_atBitBoundry = !_atBitBoundry;
+		uint8_t steps = validatePulseWidth(pulseWidth) ? 1 : 0;
 
-		if (_atBitBoundry && _bitCount == 14)
+		if (!steps && !(steps = (validatePulseWidth(pulseWidth >> 1) ? 2 : 0)))
+		{
+			_count = -1;
+			return Decoder::kInvalidTimeout;
+		}
+
+		_count += steps;
+
+		bool atBitCenter = !(_count & 1);
+
+		if (atBitCenter)
+		{
+			_data <<= 1;
+			_data |= mark ? 0 : 1;
+		}
+		else if (steps != 1)
+		{
+			_count = -1;
+			return Decoder::kInvalidTimeout;
+		}
+
+		if (mark && _count >= 26)
 		{
 			if (_delegate)
 				_delegate->RxRC5Delegate_data(_data);
-			reset();
+			_count = -1;
+			return Decoder::kInvalidTimeout;
 		}
+
+		return kTimeout;
 	}
 
 private:

@@ -27,11 +27,11 @@ class TxBeo36 : public SteppedTask
 
 	uint8_t _data;
 	PinWriter *_pin;
-	uint8_t _markVal;
+	uint8_t _mark;
 	uint8_t _count;
 public:
-	TxBeo36(PinWriter *pin, uint8_t markVal) :
-		_pin(pin), _markVal(markVal), _count(-1)
+	TxBeo36(PinWriter *pin, uint8_t mark) :
+		_pin(pin), _mark(mark), _count(-1)
 	{
 	}
 
@@ -41,21 +41,21 @@ public:
 		_count = -1;
 	}
 
-	uint16_t SteppedTask_step(uint32_t /*now*/) override
+	uint16_t SteppedTask_step() override
 	{
 		++_count;
 		if (_count >= 16)
 		{
 			_count = -1;
-			return Scheduler::kInvalidDelta;
+			return SteppedTask::kInvalidDelta;
 		}
 		bool startOfMark = !(_count & 1);
 		if (startOfMark)
 		{
-			_pin->write(_markVal);
+			_pin->write(_mark);
 			return kMarkMicros;
 		}
-		_pin->write(1 ^ _markVal);
+		_pin->write(1 ^ _mark);
 		if (_count >= 15)
 		{
 			return 13700;
@@ -68,8 +68,10 @@ public:
 	}
 };
 
-class RxBeo36 : public SteppedTask
+class RxBeo36 : public Decoder
 {
+	static const uint16_t kTimeoutMicros = 14100;
+
 public:
 	class Delegate
 	{
@@ -78,17 +80,15 @@ public:
 	};
 
 private:
-	InputFilter _inputHandler;
-	uint8_t _pin;
-	uint8_t _markVal;
+	uint8_t _mark;
 	Delegate *_delegate;
 	uint8_t _lastBit;
 	uint8_t _data;
 	uint8_t _count;
 
 public:
-	RxBeo36(uint8_t pin, uint8_t markVal, Delegate *delegate) :
-		_pin(pin), _markVal(markVal), _delegate(delegate)
+	RxBeo36(uint8_t mark, Delegate *delegate) :
+		_mark(mark), _delegate(delegate)
 	{
 		reset();
 	}
@@ -100,66 +100,54 @@ public:
 		_count = -1;
 	}
 
-	uint16_t SteppedTask_step(uint32_t now) override
+	void Decoder_timeout(uint8_t /*pinState*/) override
 	{
-		uint8_t pinValue = digitalRead(_pin);
-		if (!_inputHandler.setState(pinValue == _markVal))
-		{
-			if (_count != uint8_t(-1) && _inputHandler.getTimeSinceLastTransition(now) > 10000)
-			{
-				reset();
-			}
-			return 20;
-		}
-		// Input has changed.
-		bool state = _inputHandler.getPinState();
-		uint16_t pulseLength = _inputHandler.getAndUpdateTimeSinceLastTransition(now);
-		inputChanged(state, pulseLength);
-		return 20;
+		reset();
 	}
 
-	void inputChanged(bool pinState, uint16_t pulseTime)
+	uint16_t Decoder_pulse(uint8_t pulseState, uint16_t pulseWidth) override
 	{
+		bool mark = pulseState == _mark;
 		if (_count == uint8_t(-1))
 		{
 			// Wait for mark
-			if (!pinState)
+			if (!mark)
 			{
-				return;
+				return Decoder::kInvalidTimeout;
 			}
-			// Do not check for enough idle time here because pulseTime could have wrapped.
-			_count = 0;
-			return;
+			// Do not check for enough idle time here because pulseWidth could have wrapped.
+			++_count;
 		}
 
 		++_count;
 
-		if (!pinState)
+		if (mark)
 		{
-			if (!validMarkPulseWidth(pulseTime))
+			if (!validMarkPulseWidth(pulseWidth))
 			{
 				reset();
-				return;
+				return Decoder::kInvalidTimeout;
 			}
 			if (_count == 15)
 			{
 				if (_delegate)
 					_delegate->RxBeo36Delegate_data(_data >> 1);
 				reset();
+				return Decoder::kInvalidTimeout;
 			}
-			return;
+			return kTimeoutMicros;
 		}
 
-		uint8_t t = validDistance(pulseTime);
+		uint8_t t = validDistance(pulseWidth);
 
 		if (!t)
 		{
 			reset();
-			return;
+			return Decoder::kInvalidTimeout;
 		}
 
 		_data |= (t - 1) << (_count - 2) / 2;
-		return;
+		return kTimeoutMicros;
 	}
 
 private:

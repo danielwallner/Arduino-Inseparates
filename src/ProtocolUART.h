@@ -10,6 +10,7 @@
 // TxUART/RxUART are kind of misnomers unless they would be combined into a single class :)
 
 #include "ProtocolUtils.h"
+#include "DebugUtils.h"
 
 // Mark / Logic 1 is < -3V
 // Space / Logic 0 is > 3V
@@ -51,15 +52,15 @@ private:
 	uint8_t _stopBits;
 	uint8_t _parityValue;
 	uint8_t _pin;
-	uint8_t _markVal;
+	uint8_t _mark;
 	uint8_t _count;
 
 public:
-	TxUART(uint8_t pin, uint8_t markVal) :
-		_parity(Parity::kNone), _bits(8), _stopBits(1), _pin(pin), _markVal(markVal), _count(-1)
+	TxUART(uint8_t pin, uint8_t mark) :
+		_parity(Parity::kNone), _bits(8), _stopBits(1), _pin(pin), _mark(mark), _count(-1)
 	{
 		pinMode(pin, OUTPUT);
-		digitalWrite(pin, markVal);
+		digitalWrite(pin, mark);
 	}
 
 	void setBaudrate(uint32_t baudRate)
@@ -88,7 +89,7 @@ public:
 		_count = -1;
 	}
 
-	uint16_t SteppedTask_step(uint32_t /*now*/) override
+	uint16_t SteppedTask_step() override
 	{
 		uint8_t sent = 0;
 		uint8_t sentValue;
@@ -132,12 +133,12 @@ public:
 					break;
 				}
 				prepare(_data);
-				return Scheduler::kInvalidDelta;
+				return SteppedTask::kInvalidDelta;
 			}
 
 			if (!sent)
 			{
-				digitalWrite(_pin, bitVal ? _markVal : 1 ^ _markVal);
+				digitalWrite(_pin, bitVal ? _mark : 1 ^ _mark);
 				sentValue = bitVal;
 			}
 			else if (sentValue != bitVal)
@@ -195,7 +196,7 @@ private:
 #endif
 };
 
-class RxUART : public SteppedTask
+class RxUART : public Decoder
 {
 public:
 	class Delegate
@@ -207,7 +208,6 @@ public:
 	};
 
 private:
-	InputFilter _inputHandler;
 #if INS_UART_FRACTIONAL_TIME
 	uint8_t _fractionalBits;
 	uint16_t _bitWidthFixedPointMicros;
@@ -217,8 +217,7 @@ private:
 	uint16_t _accumulatedTime;
 #endif
 	uint8_t _data;
-	uint8_t _pin;
-	uint8_t _markVal;
+	uint8_t _mark;
 	Delegate *_delegate;
 	Parity _parity;
 	uint8_t _bits;
@@ -227,11 +226,9 @@ private:
 public:
 	// The main receive function is driven by input changes.
 	// You need to run SteppedTask_step() to get the last byte from a stream of bytes!
-	RxUART(uint8_t pin, uint8_t markVal, Delegate *delegate) :
-		_pin(pin), _markVal(markVal), _delegate(delegate), _parity(Parity::kNone), _bits(8)
+	RxUART(uint8_t mark, Delegate *delegate) :
+		_mark(mark), _delegate(delegate), _parity(Parity::kNone), _bits(8)
 	{
-		uint8_t pinValue = digitalRead(_pin);
-		_inputHandler.setState(pinValue == _markVal);
 		reset();
 	}
 
@@ -252,63 +249,75 @@ public:
 
 	void reset()
 	{
-#if INS_UART_FRACTIONAL_TIME
-		_accumulatedFixedPointTime = 0;
-#else
-		_accumulatedTime = 0;
-#endif
 		_data = 0;
 		_parityValue = 0;
 		_count = -1;
 	}
 
-	uint16_t SteppedTask_step(uint32_t now) override
+	void Decoder_timeout(uint8_t pinState) override
 	{
-		uint8_t pinValue = digitalRead(_pin);
-#if INS_UART_FRACTIONAL_TIME
-		uint16_t _bitWidthMicros = TxUART::fixedPointToUnsigned(_bitWidthFixedPointMicros, _fractionalBits);
-#endif
-		if (!_inputHandler.setState(pinValue == _markVal))
+		if (_count == uint8_t(-1))
 		{
-			if (_count == uint8_t(-1))
-			{
-				return _bitWidthMicros >> 4;
-			}
-			uint32_t pulseLength = _inputHandler.getTimeSinceLastTransition(now);
-			if (pulseLength > timeToComplete())
-			{
-				// Time-out to trigger the data callback.
-				// Would otherwise not happen until the next start bit.
-				inputChanged(true, timeToComplete(), true);
-			}
-			return _bitWidthMicros >> 4;
+			INS_DEBUGF("timeout %hhd %hhX\n", pinState, _data);
+			INS_ASSERT(0);
+			return;
 		}
-		// Input has changed.
-		bool state = _inputHandler.getPinState();
-		uint32_t pulseLength = _inputHandler.getAndUpdateTimeSinceLastTransition(now);
-		inputChanged(state, pulseLength);
-		return _bitWidthMicros >> 4;
+
+		if (pinState != _mark || _count < 1)
+		{
+			INS_DEBUGF("timeout %hhd %hhX\n", pinState, _data);
+			if (_delegate)
+				_delegate->RxUARTDelegate_timingError();
+		}
+
+		for (;;)
+		{
+			++_count;
+			if (_count < _bits + 2)
+			{
+				// Data
+				_data |= 1 << (_count - 2);
+				if (_parity == Parity::kNone)
+					continue;
+			}
+			if (_count >= _bits + 2 + (_parity == Parity::kNone ? 0 : 1))
+			{
+				// Stop
+				if (_delegate)
+				{
+					_delegate->RxUARTDelegate_data(_data);
+				}
+				reset();
+				return;
+			}
+			if (_count < _bits + 3)
+			{
+				// Parity
+				_parityValue ^= 1;
+			}
+			if (_count == _bits + 2 && (_parity == kEven ? 0 : 1) != _parityValue)
+			{
+				if (_delegate)
+					_delegate->RxUARTDelegate_parityError();
+				reset();
+				return;
+			}
+		}
 	}
 
-	void inputChanged(bool pinState, uint16_t pulseTime, bool force = false)
+	uint16_t Decoder_pulse(uint8_t pulseState, uint16_t pulseWidth) override
 	{
-#if INS_UART_FRACTIONAL_TIME
-		uint16_t _bitWidthMicros = TxUART::fixedPointToUnsigned(_bitWidthFixedPointMicros, _fractionalBits);
-#endif
-
-		// Limit pulse time so we don't overflow
-		if (_count != uint8_t(-1) && pulseTime > (5 + _bits - _count) * _bitWidthMicros)
-		{
-			pulseTime = (5 + _bits - _count) * _bitWidthMicros;
-		}
+		bool mark = pulseState == _mark;
 
 #if INS_UART_FRACTIONAL_TIME
-		uint16_t pulseWidthFixedPoint = TxUART::unsignedToFixedPoint(pulseTime, _fractionalBits);
+		uint16_t pulseWidthFixedPoint = TxUART::unsignedToFixedPoint(pulseWidth, _fractionalBits);
 		// Allow a quarter bit timing error
 		int16_t maxErrorFixedPoint = _bitWidthFixedPointMicros >> 2;
+		_accumulatedFixedPointTime += pulseWidthFixedPoint;
 #else
 		// Allow a quarter bit timing error
 		int16_t maxError = _bitWidthMicros >> 2;
+		_accumulatedTime += pulseWidth;
 #endif
 
 		bool atLeastOne = false;
@@ -317,49 +326,57 @@ public:
 			if (_count == uint8_t(-1))
 			{
 				// First mark check
-				// pulseTime might have wrapped while idle and cannot be used here to check timing.
-				if (pinState)
+				// pulseWidth might have wrapped while idle and cannot be used here to check timing.
+				if (mark)
 				{
-					return;
+					return kInvalidTimeout;
 				}
+#if INS_UART_FRACTIONAL_TIME
+				_accumulatedFixedPointTime = pulseWidthFixedPoint;
+#else
+				_accumulatedTime = pulseWidth;
+#endif
+				_data = 0;
+				_parityValue = 0;
 				_count = 0;
-				return;
 			}
 
 #if INS_UART_FRACTIONAL_TIME
-			uint16_t previousBitBoundry = _count * _bitWidthFixedPointMicros;
-			int16_t distanceToNextBitBoundry = (previousBitBoundry + _bitWidthFixedPointMicros) - (_accumulatedFixedPointTime + pulseWidthFixedPoint);
+			uint32_t previousBitBoundry = _count * uint32_t(_bitWidthFixedPointMicros);
+			int32_t distanceToNextBitBoundry = (previousBitBoundry + _bitWidthFixedPointMicros) - _accumulatedFixedPointTime;
 			if (distanceToNextBitBoundry > maxErrorFixedPoint)
 			{
-				if (distanceToNextBitBoundry < _bitWidthFixedPointMicros >> 1)
+				if (distanceToNextBitBoundry < maxErrorFixedPoint + (_bitWidthFixedPointMicros >> 1))
 #else
 			 uint16_t previousBitBoundry = _count * _bitWidthMicros;
-			 int16_t distanceToNextBitBoundry = (previousBitBoundry + _bitWidthMicros) - (_accumulatedTime + pulseTime);
+			 int16_t distanceToNextBitBoundry = (previousBitBoundry + _bitWidthMicros) - _accumulatedTime;
 			 if (distanceToNextBitBoundry > maxError)
 			 {
-				if (distanceToNextBitBoundry < _bitWidthMicros >> 1)
+				if (distanceToNextBitBoundry < maxError + (_bitWidthMicros >> 1))
 #endif
 				{
-					// Less than half a bit but more than a quarter bit left
+					// Less than three quarter bits but more than a quarter bit left
+					INS_DEBUGF("%hhd %d %hhd %d\n", pulseState, (int)pulseWidth, _count, (int)distanceToNextBitBoundry);
 					if (_delegate)
 						_delegate->RxUARTDelegate_timingError();
 					reset();
-					return;
+					return kInvalidTimeout;
 				}
 				if (atLeastOne)
 				{
 					break;
 				}
+				INS_DEBUGF("%hhd %d %hhd %d\n", pulseState, (int)pulseWidth, _count, (int)distanceToNextBitBoundry);
 				if (_delegate)
 					_delegate->RxUARTDelegate_timingError();
 				reset();
-				return;
+				return kInvalidTimeout;
 			}
 
 			atLeastOne = true;
 			++_count;
 
-			uint8_t bitValue = pinState ? 0 : 1;
+			uint8_t bitValue = mark ? 1 : 0;
 
 			if (_count == 1)
 			{
@@ -376,18 +393,17 @@ public:
 			if (_count >= _bits + 2 + (_parity == Parity::kNone ? 0 : 1))
 			{
 				// Stop
-				if (!bitValue)
+				if (!mark)
 				{
+					INS_DEBUGF("%hhd %d %hhd\n", pulseState, (int)pulseWidth, _count);
 					_delegate->RxUARTDelegate_timingError();
 				}
 				else if (_delegate)
 				{
 					_delegate->RxUARTDelegate_data(_data);
 				}
-				reset();
-				if (force)
-					return;
-				continue;
+				_count = -1;
+				return kInvalidTimeout;
 			}
 
 			if (_count < _bits + 3)
@@ -398,16 +414,14 @@ public:
 
 			if (_count == _bits + 2 && (_parity == kEven ? 0 : 1) != _parityValue)
 			{
+				INS_DEBUGF("%hhX %hhd\n", _data, _parityValue);
 				if (_delegate)
 					_delegate->RxUARTDelegate_parityError();
-				reset();
+				_count = -1;
+				return kInvalidTimeout;
 			}
 		}
-#if INS_UART_FRACTIONAL_TIME
-		_accumulatedFixedPointTime += pulseWidthFixedPoint;
-#else
-		_accumulatedTime += pulseTime;
-#endif
+		return timeToComplete();
 	}
 
 private:
@@ -416,7 +430,7 @@ private:
 #if INS_UART_FRACTIONAL_TIME
 		uint16_t _bitWidthMicros = TxUART::fixedPointToUnsigned(_bitWidthFixedPointMicros, _fractionalBits);
 #endif
-		return (3 + _bits - _count) * _bitWidthMicros;
+		return (4 + _bits - _count) * _bitWidthMicros;
 	}
 };
 

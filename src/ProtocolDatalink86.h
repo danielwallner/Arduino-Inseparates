@@ -54,13 +54,13 @@ class TxDatalink86 : public SteppedTask
 	uint64_t _data;
 	uint8_t _bits;
 	PinWriter *_pin;
-	uint8_t _markVal;
+	uint8_t _mark;
 	bool _ir;
 	bool _repeat;
 	uint8_t _count;
 public:
-	TxDatalink86(PinWriter *pin, uint8_t markVal) :
-		_pin(pin), _markVal(markVal), _count(-1)
+	TxDatalink86(PinWriter *pin, uint8_t mark) :
+		_pin(pin), _mark(mark), _count(-1)
 	{
 	}
 
@@ -73,7 +73,7 @@ public:
 		_count = -1;
 	}
 
-	uint16_t SteppedTask_step(uint32_t /*now*/) override
+	uint16_t SteppedTask_step() override
 	{
 		++_count;
 		if (_repeat && _count == 0)
@@ -85,11 +85,11 @@ public:
 		if (startOfMark)
 		{
 			// _count == even
-			_pin->write(_markVal);
+			_pin->write(_mark);
 			return _ir ? kIRMarkMicros : kDatalinkMarkMicros;
 		}
 		// _count == odd
-		_pin->write(1 ^ _markVal);
+		_pin->write(1 ^ _mark);
 		if (_count <= 3)
 		{
 			return kT1;
@@ -105,7 +105,7 @@ public:
 		if (_count == (_bits << 1) + 11)
 		{
 			_count = -1;
-			return Scheduler::kInvalidDelta;
+			return SteppedTask::kInvalidDelta;
 		}
 		uint8_t bitnum = _bits - ((_count - 7) >> 1);
 		bool thisBit = (_data >> bitnum) & 1;
@@ -118,8 +118,9 @@ public:
 	}
 };
 
-class RxDatalink86 : public SteppedTask
+class RxDatalink86 : public Decoder
 {
+	static const uint16_t kT6 = 18750; // Timeout
 public:
 	class Delegate
 	{
@@ -129,17 +130,15 @@ public:
 
 private:
 	bool _irMark;
-	InputFilter _inputHandler;
-	uint8_t _pin;
-	uint8_t _markVal;
+	uint8_t _mark;
 	Delegate *_delegate;
 	uint8_t _lastBit;
 	uint64_t _data;
 	uint8_t _count;
 
 public:
-	RxDatalink86(uint8_t pin, uint8_t markVal, Delegate *delegate) :
-		_pin(pin), _markVal(markVal), _delegate(delegate)
+	RxDatalink86(uint8_t mark, Delegate *delegate) :
+		_mark(mark), _delegate(delegate)
 	{
 		reset();
 	}
@@ -151,51 +150,43 @@ public:
 		_count = -1;
 	}
 
-	uint16_t SteppedTask_step(uint32_t now) override
+	void Decoder_timeout(uint8_t /*pinState*/) override
 	{
-		uint8_t pinValue = digitalRead(_pin);
-		if (!_inputHandler.setState(pinValue == _markVal))
+		if (_count != uint8_t(-1))
 		{
-			if (_count != uint8_t(-1) && _inputHandler.getTimeSinceLastTransition(now) > TxDatalink86::kT5 * 2)
-			{
-				reset();
-			}
-			return 10;
+			INS_ASSERT(0);
+			return;
 		}
-		// Input has changed.
-		bool state = _inputHandler.getPinState();
-		uint16_t pulseLength = _inputHandler.getAndUpdateTimeSinceLastTransition(now);
-		inputChanged(state, pulseLength);
-		return 10;
+		reset();
 	}
 
-	void inputChanged(bool pinState, uint16_t pulseTime)
+	uint16_t Decoder_pulse(uint8_t pulseState, uint16_t pulseWidth) override
 	{
+		bool mark = pulseState == _mark;
 		if (_count == uint8_t(-1))
 		{
 			// Wait for mark
-			if (!pinState)
+			if (!mark)
 			{
-				return;
+				return kInvalidTimeout;
 			}
-			// Do not check for enough idle time here because pulseTime could have wrapped.
-			_count = 0;
-			return;
+			// Do not check for enough idle time here because pulseWidth could have wrapped.
+			++_count;
 		}
 
-		if (!pinState)
+		if (mark)
 		{
-			if (!validMarkPulseWidth(pulseTime, !_count))
+			if (!validMarkPulseWidth(pulseWidth, !_count))
 			{
 				reset();
-				return;
+				return kInvalidTimeout;
 			}
-			return;
+			return kT6;
 		}
 
 		_count += 1;
 
-		uint8_t t = validDistance(pulseTime);
+		uint8_t t = validDistance(pulseWidth);
 
 		if (!t)
 		{
@@ -206,12 +197,12 @@ public:
 		{
 			if (t == 1)
 			{
-				return;
+				return kT6;
 			}
 			if (t == 5)
 			{
 				_count = 3;
-				return;
+				return kT6;
 			}
 			goto distance_error;
 		}
@@ -219,7 +210,7 @@ public:
 		{
 			if (t != 5)
 				goto distance_error;
-			return;
+			return kT6;
 		}
 		if (t == 4)
 		{
@@ -245,11 +236,11 @@ public:
 
 		_data <<= 1;
 		_data |= _lastBit;
-		return;
+		return kT6;
 
 	distance_error:
 		reset();
-		return;
+		return kInvalidTimeout;
 	}
 
 private:

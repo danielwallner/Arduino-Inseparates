@@ -11,6 +11,7 @@
 // Used between units in a Beosystem, even when the system uses the new format for multi room connectivity.
 
 #include "ProtocolUtils.h"
+#include "DebugUtils.h"
 
 namespace inseparates
 {
@@ -23,11 +24,12 @@ class TxDatalink80 : public SteppedTask
 
 	uint8_t _data;
 	PinWriter *_pin;
-	uint8_t _markVal;
+	uint8_t _mark;
 	uint8_t _count;
+	bool _sendRepeatSpace;
 public:
-	TxDatalink80(PinWriter *pin, uint8_t markVal) :
-		_pin(pin), _markVal(markVal), _count(-1)
+	TxDatalink80(PinWriter *pin, uint8_t mark) :
+		_pin(pin), _mark(mark), _count(-1)
 	{
 	}
 
@@ -35,14 +37,21 @@ public:
 	{
 		_data = data;
 		_count = -1;
+		_sendRepeatSpace = false;
 	}
 
-	uint16_t SteppedTask_step(uint32_t /*now*/) override
+	uint16_t SteppedTask_step() override
 	{
 		uint8_t sent = 0;
 		uint8_t sentValue;
 		for (;;)
 		{
+			if (_sendRepeatSpace)
+			{
+				_sendRepeatSpace = false;
+				return 8 * kBitWidthMicros;
+			}
+
 			++_count;
 			uint8_t bitCount = _count > 8 ? _count - 9 : _count;
 			uint8_t bitVal = 1;
@@ -57,19 +66,26 @@ public:
 				bitVal = bitVal ? 0 : 1;
 			}
 
+			if (bitCount == 8 && sent > 1 && sentValue == 1)
+			{
+				// Prevent overflow.
+				_sendRepeatSpace = true;
+				return sent * kBitWidthMicros;
+			}
+
 			if (_count >= 18)
 			{
 				if (_count == 18)
 				{
 					break;
 				}
-				prepare(_data);
-				return Scheduler::kInvalidDelta;
+				_count = -1;
+				return SteppedTask::kInvalidDelta;
 			}
 
 			if (!sent)
 			{
-				_pin->write(bitVal ? 1 ^ _markVal : _markVal);
+				_pin->write(bitVal ? 1 ^ _mark : _mark);
 				sentValue = bitVal;
 			}
 			else if (sentValue != bitVal)
@@ -77,13 +93,14 @@ public:
 				--_count;
 				break;
 			}
+
 			sent += bitCount == 8 ? 8 : 1;
 		}
 		return sent * kBitWidthMicros;
 	}
 };
 
-class RxDatalink80 : public SteppedTask
+class RxDatalink80 : public Decoder
 {
 public:
 	class Delegate
@@ -94,103 +111,109 @@ public:
 	};
 
 private:
-	InputFilter _inputHandler;
-	uint16_t _startTime;
 	uint16_t _accumulatedTime;
 	uint8_t _data;
-	uint8_t _pin;
-	uint8_t _markVal;
+	uint8_t _mark;
 	Delegate *_delegate;
-	uint8_t _parityValue;
 	uint8_t _count;
 public:
 	// The main receive function is driven by input changes.
 	// You need to run SteppedTask_step() to get the last byte from a stream of bytes!
-	RxDatalink80(uint8_t pin, uint8_t markVal, Delegate *delegate) :
-		_pin(pin), _markVal(markVal), _delegate(delegate)
+	RxDatalink80(uint8_t mark, Delegate *delegate) :
+		_mark(mark), _delegate(delegate)
 	{
 		reset();
 	}
 
 	void reset()
 	{
-		_accumulatedTime = 0;
 		_data = 0;
-		_parityValue = 0;
 		_count = -1;
 	}
 
-	uint16_t SteppedTask_step(uint32_t now) override
+	void Decoder_timeout(uint8_t pinState) override
 	{
-		uint8_t pinValue = digitalRead(_pin);
-		if (!_inputHandler.setState(pinValue == _markVal))
+		if (_count == uint8_t(-1))
 		{
-			if (_count == uint8_t(-1))
-			{
-				return 15;
-			}
-			uint16_t passed = uint16_t(now) - _startTime;
-			if (passed > 9 * TxDatalink80::kBitWidthMicros)
-			{
-				// Finish or reset previous byte if not done.
-				inputChanged(true, passed - _accumulatedTime, true);
-			}
-			return 15;
+			INS_ASSERT(0);
+			return;
 		}
-		// Input has changed.
-		bool state = _inputHandler.getPinState();
-		uint16_t pulseLength = _inputHandler.getAndUpdateTimeSinceLastTransition(now);
-		inputChanged(state, pulseLength);
-		return 15;
+		if (pinState == _mark || _count < 1)
+		{
+			if (_delegate)
+				_delegate->RxDatalink80Delegate_timingError();
+		}
+
+		for (;;)
+		{
+			++_count;
+
+			if (_count < 9)
+			{
+				// Data
+				uint8_t bitValue = pinState ? 0 : 1;
+				_data |= bitValue << (8 - _count);
+				continue;
+			}
+			if (_delegate)
+			{
+				_delegate->RxDatalink80Delegate_data(_data);
+			}
+			reset();
+			return;
+		}
 	}
 
-	void inputChanged(bool pinState, uint16_t pulseTime, bool force = false)
+	uint16_t Decoder_pulse(uint8_t pulseState, uint16_t pulseWidth) override
 	{
+		bool mark = pulseState == _mark;
 		// Allow a quarter bit timing error
 		int16_t maxError = TxDatalink80::kBitWidthMicros >> 2;
 
-		if (pulseTime > 25000)
+		if (pulseWidth > 25000)
 		{
 			// Prevent overflow
-			pulseTime = 25000;
+			pulseWidth = 25000;
 		}
+		_accumulatedTime += pulseWidth;
 
 		bool atLeastOne = false;
 		for (;;)
 		{
 			if (_count == uint8_t(-1))
 			{
-				if (!pinState)
+				if (!mark)
 				{
 					// Not mark
-					// Do not check for enough idle time here because pulseTime can have wrapped.
-					return;
+					// Do not check for enough idle time here because pulseWidth can have wrapped.
+					return Decoder::kInvalidTimeout;
 				}
-				_count = 0;
-				_startTime = fastMicros();
-				return;
+				_data = 0;
+				_accumulatedTime = pulseWidth;
+				++_count;
 			}
 
 			uint16_t previousBitBoundry = _count * TxDatalink80::kBitWidthMicros;
-			int16_t distanceToNextBitBoundry = (previousBitBoundry + TxDatalink80::kBitWidthMicros) - (_accumulatedTime + pulseTime);
+			int16_t distanceToNextBitBoundry = (previousBitBoundry + TxDatalink80::kBitWidthMicros) - _accumulatedTime;
 			if (distanceToNextBitBoundry > maxError)
 			{
-				if (distanceToNextBitBoundry < TxDatalink80::kBitWidthMicros >> 1)
+				if (distanceToNextBitBoundry < maxError + (TxDatalink80::kBitWidthMicros >> 1))
 				{
-					// Less than half a bit but more than a quarter bit left
+					// Less than three quarter bits but more than a quarter bit left
 					if (_delegate)
 						_delegate->RxDatalink80Delegate_timingError();
-					reset();
-					return;
+					_count = -1;
+					return Decoder::kInvalidTimeout;
 				}
 				if (atLeastOne)
 				{
 					break;
 				}
+				INS_DEBUGF("%d %d %d %d\n", (int)pulseState, (int)pulseWidth, (int)_count, (int)distanceToNextBitBoundry);
 				if (_delegate)
 					_delegate->RxDatalink80Delegate_timingError();
-				reset();
-				return;
+				_count = -1;
+				return Decoder::kInvalidTimeout;
 			}
 
 			atLeastOne = true;
@@ -204,12 +227,12 @@ public:
 			if (_count < 9)
 			{
 				// Data
-				uint8_t bitValue = pinState ? 0 : 1;
+				uint8_t bitValue = mark ? 1 : 0;
 				_data |= bitValue << (8 - _count);
 				continue;
 			}
 			// Stop
-			if (!pinState)
+			if (mark)
 			{
 				_delegate->RxDatalink80Delegate_timingError();
 			}
@@ -217,12 +240,10 @@ public:
 			{
 				_delegate->RxDatalink80Delegate_data(_data);
 			}
-			reset();
-			if (force)
-				return;
-			continue;
+			_count = -1;
+			return Decoder::kInvalidTimeout;
 		}
-		_accumulatedTime += pulseTime;
+		return (9 - _count) * TxDatalink80::kBitWidthMicros;
 	}
 };
 

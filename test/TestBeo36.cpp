@@ -69,56 +69,56 @@ TEST(RxTest, Beo36)
 
 	Delegate delegate(receivedData);
 
-	RxBeo36 beo36Decoder(pin, LOW, &delegate);
+	RxBeo36 beo36Decoder(LOW, &delegate);
 
 	uint16_t startDelay = 4321;
 	uint32_t data = 0x01;
 	resetLogs();
-	digitalWrite(pin, LOW);
+	digitalWrite(pin, HIGH);
 	delayMicroseconds(startDelay);
 	PushPullPinWriter pinWriter(pin);
-	TxBeo36 tx1(&pinWriter, HIGH);
+	TxBeo36 tx1(&pinWriter, LOW);
 	tx1.prepare(data);
 	Scheduler::run(&tx1);
 	for (unsigned i = 0; i < g_digitalWriteStateLog[pin].size(); i++)
 	{
-		beo36Decoder.inputChanged(g_digitalWriteStateLog[pin][i], g_digitalWriteTimeLog[pin][i]);
+		beo36Decoder.Decoder_pulse(1 ^ g_digitalWriteStateLog[pin][i], g_digitalWriteTimeLog[pin][i]);
 	}
 	EXPECT_EQ(data, receivedData);
 
 	data = 0x3F;
 	resetLogs();
-	digitalWrite(pin, LOW);
+	digitalWrite(pin, HIGH);
 	delayMicroseconds(startDelay);
 	tx1.prepare(data);
 	Scheduler::run(&tx1);
 	for (unsigned i = 0; i < g_digitalWriteStateLog[pin].size(); i++)
 	{
-		beo36Decoder.inputChanged(g_digitalWriteStateLog[pin][i], g_digitalWriteTimeLog[pin][i]);
+		beo36Decoder.Decoder_pulse(1 ^ g_digitalWriteStateLog[pin][i], g_digitalWriteTimeLog[pin][i]);
 	}
 	EXPECT_EQ(data, receivedData);
 
 	data = 0x2A;
 	resetLogs();
-	digitalWrite(pin, LOW);
+	digitalWrite(pin, HIGH);
 	delayMicroseconds(startDelay);
 	tx1.prepare(data);
 	Scheduler::run(&tx1);
 	for (unsigned i = 0; i < g_digitalWriteStateLog[pin].size(); i++)
 	{
-		beo36Decoder.inputChanged(g_digitalWriteStateLog[pin][i], g_digitalWriteTimeLog[pin][i]);
+		beo36Decoder.Decoder_pulse(1 ^ g_digitalWriteStateLog[pin][i], g_digitalWriteTimeLog[pin][i]);
 	}
 	EXPECT_EQ(data, receivedData);
 
 	data = 0x15;
 	resetLogs();
-	digitalWrite(pin, LOW);
+	digitalWrite(pin, HIGH);
 	delayMicroseconds(startDelay);
 	tx1.prepare(data);
 	Scheduler::run(&tx1);
 	for (unsigned i = 0; i < g_digitalWriteStateLog[pin].size(); i++)
 	{
-		beo36Decoder.inputChanged(g_digitalWriteStateLog[pin][i], g_digitalWriteTimeLog[pin][i]);
+		beo36Decoder.Decoder_pulse(1 ^ g_digitalWriteStateLog[pin][i], g_digitalWriteTimeLog[pin][i]);
 	}
 	EXPECT_EQ(data, receivedData);
 }

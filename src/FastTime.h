@@ -14,12 +14,7 @@
 namespace inseparates
 {
 
-#if UNIT_TEST
-
-inline uint32_t fastMicros() { return micros(); }
-inline void safeDelayMicros(uint32_t microsDelay) { delayMicroseconds(microsDelay); }
-
-#elif INS_FAST_TIME && AVR
+#if INS_FAST_TIME && AVR
 
 #define INS_FAST_COUNT 1
 
@@ -54,10 +49,10 @@ inline uint16_t fastCount()
 #endif
 }
 
-// This function must be called more often than kFastCountMaxMicros with some margin!
-inline uint32_t fastMicros()
+// Must must be called more often than kFastCountMaxMicros with some margin!
+inline uint16_t fastMicros()
 {
-	static uint32_t micros;
+	static uint16_t micros;
 	static uint16_t oldCnt;
 	uint16_t now = fastCount();
 	uint16_t diff = (now - oldCnt) / kFastCountsPerMicro;
@@ -68,7 +63,9 @@ inline uint32_t fastMicros()
 
 #else
 
-inline uint32_t fastMicros()
+#define setupFastTime() ((void)0)
+
+inline uint16_t fastMicros()
 {
 	return micros();
 }
@@ -83,7 +80,7 @@ inline void safeDelayMicros(int32_t microsDelay)
 #ifndef UNIT_TEST
 		if (microsDelay <= 10)
 		{
-			uint32_t start = fastMicros();
+			uint16_t start = fastMicros();
 			while(fastMicros() - start < uint16_t(microsDelay));
 			return;
 		}
@@ -100,6 +97,36 @@ inline void safeDelayMicros(int32_t microsDelay)
 		microsDelay -= 16383;
 	}
 }
+
+// Helper for easier timekeeping when fastMicros() 16 bits are not enough.
+// If this class is instantiated as a global _start will likely not be correctly initalized until reset().
+class Timekeeper
+{
+	uint32_t _start;
+	uint32_t _micros32;
+public:
+	Timekeeper() : _start(fastMicros()) {}
+
+	void reset() { tick(); _start = _micros32; }
+
+	void tick(uint16_t micros)
+	{
+		uint16_t diff = micros - uint16_t(_micros32);
+		_micros32 += diff;
+	}
+	uint32_t microsSinceReset(uint16_t micros) { tick(micros); return _micros32 - _start; }
+	uint16_t millisSinceReset(uint16_t micros) { return microsSinceReset(micros) / 1000; }
+	uint16_t secondsSinceReset(uint16_t micros) { return microsSinceReset(micros) / 1000000UL; }
+
+	void tick()
+	{
+		uint16_t diff = fastMicros() - uint16_t(_micros32);
+		_micros32 += diff;
+	}
+	uint32_t microsSinceReset() { tick(); return _micros32 - _start; }
+	uint16_t millisSinceReset() { return microsSinceReset() / 1000; }
+	uint16_t secondsSinceReset() { return microsSinceReset() / 1000000UL; }
+};
 
 }
 

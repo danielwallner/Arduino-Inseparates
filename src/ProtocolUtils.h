@@ -56,7 +56,7 @@ public:
 	}
 };
 
-// There can only be one PWMPinWriter at a time!
+// There can only be one PWMPinWriter active at a time!
 class PWMPinWriter : public PinWriter
 {
 	const uint8_t _pin;
@@ -194,7 +194,7 @@ class SoftPWMPinWriter : public PinWriter, public SteppedTask
 	uint8_t _state;
 	uint16_t _onTime = 0;
 	uint16_t _offTime;
-	uint32_t _accumulator;
+	uint16_t _accumulator;
 public:
 	SoftPWMPinWriter(uint8_t pin, uint8_t onState) :
 		_pin(pin),
@@ -217,10 +217,10 @@ public:
 		_state = value;
 		if (_modulating)
 		{
-			_accumulator = fastMicros() << kFractionalBits;
+			_accumulator = 0;
 		}
 	}
-	uint16_t SteppedTask_step(uint32_t now) override
+	uint16_t SteppedTask_step() override
 	{
 		if (!_modulating)
 		{
@@ -228,17 +228,13 @@ public:
 		}
 		_state = 1 ^ _state;
 		digitalWrite(_pin, _state);
-		//now = fastMicros();
-		int16_t diff = uint16_t(now) - uint16_t(_accumulator >> kFractionalBits);
 		if (_state == _onState)
 			_accumulator += _onTime;
 		else
 			_accumulator += _offTime;
-		uint16_t target = _accumulator >> kFractionalBits;
-		diff = target - uint16_t(now);
-		if (diff > 0)
-			return diff;
-		return 0;
+		uint16_t micros = _accumulator >> kFractionalBits;
+		_accumulator -= micros << kFractionalBits;
+		return micros;
 	}
 };
 
@@ -261,7 +257,7 @@ private:
 	bool _didTransition = false;
 
 public:
-	CheckingPinWriter(uint8_t pin, uint16_t step, Delegate *delegate, uint8_t onState = LOW) : _step(step), _pin(pin), _delegate(delegate), _onState(onState), _pinState(1 & (~onState)) {}
+	CheckingPinWriter(uint8_t pin, uint16_t step, Delegate *delegate, uint8_t onState) : _step(step), _pin(pin), _delegate(delegate), _onState(onState), _pinState(1 & (~onState)) {}
 
 	void write(uint8_t value) override
 	{
@@ -276,7 +272,7 @@ public:
 		_pinState = value;
 	}
 
-	uint16_t SteppedTask_step(uint32_t /*now*/) override
+	uint16_t SteppedTask_step() override
 	{
 		if (_didTransition)
 		{
@@ -294,13 +290,13 @@ public:
 class TxJam : public SteppedTask
 {
 	PinWriter *_pin;
-	uint8_t _markVal;
+	uint8_t _mark;
 	uint32_t _length;
 	uint8_t _count;
-	uint32_t _start;
+	uint32_t _microsSinceStart;
 public:
-	TxJam(PinWriter *pin, uint8_t markVal, uint32_t length) :
-		_pin(pin), _markVal(markVal), _length(length), _count(-1)
+	TxJam(PinWriter *pin, uint8_t mark, uint32_t length) :
+		_pin(pin), _mark(mark), _length(length), _count(-1)
 	{
 		prepare(length);
 	}
@@ -311,29 +307,29 @@ public:
 		_count = -1;
 	}
 
-	uint16_t SteppedTask_step(uint32_t now) override
+	uint16_t SteppedTask_step() override
 	{
 		++_count;
 		if (!_count)
 		{
-			_start = now;
-			_pin->write(_markVal);
+			_microsSinceStart = 0;
+			_pin->write(_mark);
 			return _length;
 		}
-		uint32_t elapsed = now - _start;
-		if (elapsed >= _length)
+		if (_microsSinceStart >= _length)
 		{
-			_pin->write(1 ^ _markVal);
+			_pin->write(1 ^ _mark);
 			_count = -1;
-			return Scheduler::kInvalidDelta;
+			return kInvalidDelta;
 		}
-		if (_length - elapsed > Scheduler::kMaxSleepMicros)
-			return Scheduler::kMaxSleepMicros;
-		return _length - elapsed;
+		_microsSinceStart += kMaxSleepMicros;
+		if (_length - _microsSinceStart > kMaxSleepMicros)
+			return kMaxSleepMicros;
+		return _length - _microsSinceStart;
 	}
 };
 
-// Input filter and time keeper
+// Input filter and timekeeper
 class InputFilter
 {
 	uint8_t _ones = 0;

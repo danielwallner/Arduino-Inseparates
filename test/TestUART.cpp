@@ -84,7 +84,7 @@ TEST(RxTest, UART)
 
 	Delegate delegate(receivedData);
 
-	RxUART rxUART(pin, HIGH, &delegate);
+	RxUART rxUART(HIGH, &delegate);
 	rxUART.setBaudrate(10000);
 
 	uint16_t startDelay = 4321;
@@ -95,11 +95,11 @@ TEST(RxTest, UART)
 	tx1.setBaudrate(10000);
 	tx1.prepare(data);
 	Scheduler::run(&tx1);
-	for (unsigned i = 0; i < g_digitalWriteStateLog[pin].size(); i++)
+	for (unsigned i = 1; i < g_digitalWriteStateLog[pin].size(); i++)
 	{
-		rxUART.inputChanged(g_digitalWriteStateLog[pin][i], g_digitalWriteTimeLog[pin][i]);
+		rxUART.Decoder_pulse(1 ^ g_digitalWriteStateLog[pin][i], g_digitalWriteTimeLog[pin][i]);
 	}
-	rxUART.inputChanged(false, totalDelay() - g_lastWrite[pin], false);
+	rxUART.Decoder_timeout(g_digitalWriteStateLog[pin].back());
 	EXPECT_EQ(1000 + startDelay, totalDelay());
 	EXPECT_EQ(data, receivedData);
 
@@ -114,9 +114,9 @@ TEST(RxTest, UART)
 	Scheduler::run(&tx1);
 	for (unsigned i = 0; i < g_digitalWriteStateLog[pin].size(); i++)
 	{
-		rxUART.inputChanged(g_digitalWriteStateLog[pin][i], g_digitalWriteTimeLog[pin][i]);
+		rxUART.Decoder_pulse(1 ^ g_digitalWriteStateLog[pin][i], g_digitalWriteTimeLog[pin][i]);
 	}
-	rxUART.inputChanged(false, 100 * (1 + 5 + 1 + 1) - (g_lastWrite[pin] - startDelay), false);
+	rxUART.Decoder_timeout(g_digitalWriteStateLog[pin].back());
 	EXPECT_EQ(100 * (1 + 5 + 1 + 6) + startDelay, totalDelay());
 	EXPECT_EQ(data, receivedData);
 
@@ -131,9 +131,9 @@ TEST(RxTest, UART)
 	Scheduler::run(&tx1);
 	for (unsigned i = 0; i < g_digitalWriteStateLog[pin].size(); i++)
 	{
-		rxUART.inputChanged(g_digitalWriteStateLog[pin][i], g_digitalWriteTimeLog[pin][i]);
+		rxUART.Decoder_pulse(1 ^ g_digitalWriteStateLog[pin][i], g_digitalWriteTimeLog[pin][i]);
 	}
-	rxUART.inputChanged(false, 100 * (1 + 8 + 1 + 1) - (g_lastWrite[pin] - startDelay), false);
+	rxUART.Decoder_timeout(g_digitalWriteStateLog[pin].back());
 	EXPECT_EQ(1200 + startDelay, totalDelay());
 	EXPECT_EQ(data, receivedData);
 
@@ -145,9 +145,9 @@ TEST(RxTest, UART)
 	Scheduler::run(&tx1);
 	for (unsigned i = 0; i < g_digitalWriteStateLog[pin].size(); i++)
 	{
-		rxUART.inputChanged(g_digitalWriteStateLog[pin][i], g_digitalWriteTimeLog[pin][i]);
+		rxUART.Decoder_pulse(1 ^ g_digitalWriteStateLog[pin][i], g_digitalWriteTimeLog[pin][i]);
 	}
-	rxUART.inputChanged(false, 100 * (1 + 8 + 1 + 1) - (g_lastWrite[pin] - startDelay), false);
+	rxUART.Decoder_timeout(g_digitalWriteStateLog[pin].back());
 	EXPECT_EQ(1200 + startDelay, totalDelay());
 	EXPECT_EQ(data, receivedData);
 }

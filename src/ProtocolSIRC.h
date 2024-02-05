@@ -12,6 +12,7 @@
 // To make sure you don't break anything measure and check the service manual!
 
 #include "ProtocolUtils.h"
+#include "DebugUtils.h"
 
 namespace inseparates
 {
@@ -26,12 +27,12 @@ class TxSIRC : public SteppedTask
 	uint32_t _data;
 	uint8_t _bits;
 	PinWriter *_pin;
-	uint8_t _markVal;
+	uint8_t _mark;
 	uint8_t _count;
-	uint16_t _startMicros;
+	uint16_t _microsAccumulator;
 public:
-	TxSIRC(PinWriter *pin, uint8_t markVal) :
-		_pin(pin), _markVal(markVal), _count(-1)
+	TxSIRC(PinWriter *pin, uint8_t mark) :
+		_pin(pin), _mark(mark), _count(-1)
 	{
 	}
 
@@ -46,37 +47,41 @@ public:
 	static inline uint16_t encodeSIRC(uint8_t address, uint8_t command) { return (uint16_t(address) << 7) | command; }
 	static inline uint32_t encodeSIRC20(uint8_t extended, uint8_t address, uint8_t command) { return (uint32_t(extended) << 12) | (uint16_t(address) << 7) | command; }
 
-	uint16_t SteppedTask_step(uint32_t now) override
+	uint16_t SteppedTask_step() override
 	{
 		++_count;
 		if (_count > (_bits << 1) + 1)
 		{
 			_count = -1;
-			return Scheduler::kInvalidDelta;
+			return SteppedTask::kInvalidDelta;
 		}
 		bool bitBoundry = !(_count & 1);
-		_pin->write(bitBoundry ? _markVal : 1 ^ _markVal);
+		_pin->write(bitBoundry ? _mark : 1 ^ _mark);
 		if (!_count)
 		{
-			_startMicros = now;
+			_microsAccumulator = kStartMarkMicros;
 			return kStartMarkMicros;
 		}
 		if (_count == (_bits << 1) + 1)
 		{
-			uint16_t microsUntilRepeat = kRepeatInterval - (uint16_t(now) - _startMicros);
+			uint16_t microsUntilRepeat = kRepeatInterval - _microsAccumulator;
+			_microsAccumulator += microsUntilRepeat;
 			return microsUntilRepeat;
 		}
 		if (!bitBoundry)
 		{
+			_microsAccumulator += kStepMicros;
 			return kStepMicros;
 		}
 		uint8_t bitNum = (_count >> 1) - 1;
 		bool bitVal = (_data >> bitNum) & 1;
-		return bitVal ? kStepMicros << 1 : kStepMicros;
+		uint16_t sleepTime = bitVal ? kStepMicros << 1 : kStepMicros;
+		_microsAccumulator += sleepTime;
+		return sleepTime;
 	}
 };
 
-class RxSIRC : public SteppedTask
+class RxSIRC : public Decoder
 {
 public:
 	class Delegate
@@ -92,10 +97,9 @@ private:
 	static const uint16_t kSIRCShortMaxMicros = 800;
 	static const uint16_t kSIRCLongMinMicros = 1050;
 	static const uint16_t kSIRCLongMaxMicros = 1550;
+	static const uint16_t kTimeout = kSIRCStartMarkMaxMicros + kSIRCShortMinMicros;
 
-	InputFilter _inputHandler;
-	uint8_t _pin;
-	uint8_t _markVal;
+	uint8_t _mark;
 	Delegate *_delegate;
 	uint32_t _data;
 	uint8_t _maxBits;
@@ -105,8 +109,8 @@ public:
 	// If messages are less than 20 bits it is impossible to know if the message is complete when the last bit is received!
 	// You need to specify number of bits or poll by running step to trigger receive callback!
 	// Otherwise 12-bit or 15-bit messages will not be received!
-	RxSIRC(uint8_t pin, uint8_t markVal, Delegate *delegate, uint8_t maxBits = 20) :
-		_pin(pin), _markVal(markVal), _delegate(delegate), _maxBits(maxBits)
+	RxSIRC(uint8_t mark, Delegate *delegate, uint8_t maxBits = 20) :
+		_mark(mark), _delegate(delegate), _maxBits(maxBits)
 	{
 		reset();
 	}
@@ -117,84 +121,61 @@ public:
 		_count = -1;
 	}
 
-	uint16_t SteppedTask_step(uint32_t now) override
-	{
-		uint8_t pinValue = digitalRead(_pin);
-		if (!_inputHandler.setState(pinValue == _markVal))
-		{
-			if (_count == uint8_t(-1))
-			{
-				return kSIRCLongMinMicros >> 4;
-			}
-			if (_count >= 24 && _inputHandler.getTimeSinceLastTransition(now) > kSIRCStartMarkMinMicros)
-			{
-				if (_delegate)
-					_delegate->RxSIRCDelegate_data(_data, _count >> 1);
-				reset();
-			}
-			if (_count)
-			{
-				if (_inputHandler.getTimeSinceLastTransition(now) > kSIRCStartMarkMaxMicros * 2)
-				{
-					reset();
-				}
-			}
-			return kSIRCLongMinMicros >> 4;
-		}
-		// Input has changed.
-		bool state = _inputHandler.getPinState();
-		uint16_t pulseLength = _inputHandler.getAndUpdateTimeSinceLastTransition(now);
-		inputChanged(state, pulseLength);
-		return kSIRCLongMinMicros >> 4;
-	}
-
-	void inputChanged(bool pinState, uint16_t pulseTime)
+	void Decoder_timeout(uint8_t pinState) override
 	{
 		if (_count == uint8_t(-1))
 		{
-			// First mark check
-			if (!pinState)
-			{
-				return;
-			}
-			_count = 0;
+			INS_ASSERT(0);
 			return;
 		}
 
-		if (_count >= 24 && pulseTime > kSIRCStartMarkMinMicros)
+		if (pinState != _mark)
 		{
 			if (_delegate)
 				_delegate->RxSIRCDelegate_data(_data, _count >> 1);
-			reset();
+		}
+		reset();
+	}
+
+	uint16_t Decoder_pulse(uint8_t pulseState, uint16_t pulseWidth) override
+	{
+		bool mark = pulseState == _mark;
+		if (_count == uint8_t(-1))
+		{
+			// First mark check
+			if (!mark)
+			{
+				return Decoder::kInvalidTimeout;
+			}
 		}
 
 		_count += 1;
 
-		if (_count == 1)
+		if (_count == 0)
 		{
-			if (pulseTime < kSIRCStartMarkMinMicros || pulseTime > kSIRCStartMarkMaxMicros)
+			if (pulseWidth < kSIRCStartMarkMinMicros || pulseWidth > kSIRCStartMarkMaxMicros)
 			{
 				reset();
-				return;
+				return Decoder::kInvalidTimeout;
 			}
-			return;
+			return kTimeout;
 		}
 
-		if (pinState)
+		if (!mark)
 		{
-			if (!validatePulseWidth(pulseTime))
+			if (!validatePulseWidth(pulseWidth))
 			{
 				reset();
-				return;
+				return Decoder::kInvalidTimeout;
 			}
-			return;
+			return kTimeout;
 		}
 
-		if (pulseTime >= kSIRCShortMinMicros && pulseTime <= kSIRCShortMaxMicros)
+		if (pulseWidth >= kSIRCShortMinMicros && pulseWidth <= kSIRCShortMaxMicros)
 		{
 			// Short pulse, consider as 0
 		}
-		else if (pulseTime >= kSIRCLongMinMicros && pulseTime <= kSIRCLongMaxMicros)
+		else if (pulseWidth >= kSIRCLongMinMicros && pulseWidth <= kSIRCLongMaxMicros)
 		{
 			// Long pulse, consider as 1
 			_data |= uint32_t(1) << ((_count - 2) >> 1);
@@ -202,15 +183,17 @@ public:
 		else
 		{
 			reset();
-			return;
+			return Decoder::kInvalidTimeout;
 		}
 
-		if (!pinState && _count >= (_maxBits << 1))
+		if (mark && _count >= (_maxBits << 1))
 		{
 			if (_delegate)
 				_delegate->RxSIRCDelegate_data(_data, _count >> 1);
 			reset();
+			return Decoder::kInvalidTimeout;
 		}
+		return kTimeout;
 	}
 
 private:

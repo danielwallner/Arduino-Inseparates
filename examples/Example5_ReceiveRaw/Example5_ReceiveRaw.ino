@@ -1,19 +1,21 @@
 // Copyright (c) 2024 Daniel Wallner
 
-// Print timing on one or two pins
+// Prints timing on one or two pins.
+// Outputs timing as pulses arrive.
+// That means that the printed timing will not be accurate for very short pulses.
 
 #define INS_FAST_TIME 1
 #define DEBUG_CYCLE_TIMING 0
 #define DUAL_PIN 0
-#define PRINT_ACCUMULATED_TIME 0 // Will decrease accuracy for pulses < 200 us on AVR
+#define PRINT_ACCUMULATED_TIME 0 // Will decrease accuracy for pulses < 200 us on AVR.
 
 #include <Inseparates.h>
 #include <DebugUtils.h>
 #include <ProtocolUtils.h>
 
-const uint16_t kInputPin0 = 10;
+const uint16_t kInputPin0 = D4;
 #if DUAL_PIN
-const uint16_t kInputPin1 = 3;
+const uint16_t kInputPin1 = D5;
 #endif
 
 const uint32_t kMaxSpaceMicros = 10000;
@@ -33,7 +35,7 @@ void InsError(uint32_t error)
   Serial.print("ERROR: ");
   Serial.println(errorMsg);
   Serial.flush();
-  for(;;);
+  for(;;) yield();
 }
 
 void setup()
@@ -43,11 +45,8 @@ void setup()
   while (!Serial)
     delay(50);
 
-#if INS_FAST_TIME && AVR
+#if INS_FAST_TIME
   setupFastTime();
-#endif
-#if DEBUG_CYCLE_TIMING
-  lastReport = fastMicros();
 #endif
 }
 
@@ -58,6 +57,7 @@ InputFilter inputFilter1;
 
 uint32_t accumulatedTime = 0;
 
+Timekeeper timekeeper;
 DebugPrinter printer;
 
 void loop()
@@ -79,20 +79,18 @@ void loop()
   }
 #endif
 
-  uint32_t now = fastMicros();
-  printer.SteppedTask_step(now);
+  uint16_t now = fastMicros();
+  printer.SteppedTask_step();
 #if DEBUG_CYCLE_TIMING
   cCheck.tick(now);
 #endif
 
 #if DEBUG_CYCLE_TIMING
-  static bool didReport;
-  if (now - lastReport >= 5000000)
+  if (timekeeper.secondsSinceReset(now) >= 5)
   {
-    lastReport = now;
+    timekeeper.reset();
     printer.flush();
     cCheck.report(printer);
-    didReport = true;
   }
 #endif
 

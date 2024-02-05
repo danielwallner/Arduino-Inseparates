@@ -1,11 +1,11 @@
 // Copyright (c) 2024 Daniel Wallner
 
 // A simple send example that doesn't use full scheduling.
-// Sends nonconcurrent messages, one at a time.
+// Sends single messages, one at a time.
 
-//#define INS_FAST_TIME 1
-#define HW_PWM 1 // Will use timer 2 on AVR.
-#define SW_PWM 0 // This requires running two tasks in parallel, see below.
+#define INS_FAST_TIME 1
+#define HW_PWM 0 // Will use timer 2 on AVR.
+#define SW_PWM 1 // This requires running two tasks in parallel, see below.
 
 #define TEST_PWM 0 // Sends long marks for PWM tests.
 
@@ -14,7 +14,7 @@
 #include <Inseparates.h>
 #include <ProtocolRC5.h>
 
-const uint16_t kIRSendPin = 26; // Use pin 3 when using HW_PWM on AVR.
+const uint16_t kIRSendPin = D3; // Use pin 3 when using HW_PWM on AVR.
 
 using namespace inseparates;
 
@@ -34,7 +34,7 @@ TxRC5 tx(&pinWriter, ACTIVE);
 #endif
 
 // All errors end up here.
-// This function must be defined or there will be linker errors.
+// This function must be defined or there will be a linker error.
 void InsError(uint32_t error)
 {
   char errorMsg[5];
@@ -43,7 +43,7 @@ void InsError(uint32_t error)
   Serial.print("ERROR: ");
   Serial.println(errorMsg);
   Serial.flush();
-  for(;;); // Halt. If there's a watchdog timer this will trigger restart.
+  for(;;) yield();
 }
 
 void setup()
@@ -57,7 +57,7 @@ void setup()
   Serial.println(kIRSendPin);
 
 #if HW_PWM
-  pinWriter.prepare(315000, 30);
+  pinWriter.prepare(36000, 30);
 #elif SW_PWM
   pinWriter.prepare(36000, 30);
   scheduler.add(&pinWriter);
@@ -80,7 +80,7 @@ void loop()
   scheduler.add(&tx);
   // Run the scheduler for as long as the send is active.
   while (scheduler.active(&tx))
-    scheduler.SteppedTask_step(fastMicros());
+    scheduler.poll();
 
 #else
 

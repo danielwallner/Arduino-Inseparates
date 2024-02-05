@@ -5,6 +5,28 @@
 
 #include "FastTime.h"
 
+#ifdef INS_DEBUGGING
+	void INS_DEBUGF(const char *format, ...);
+	inline void INS_DEBUG(const char *s) { INS_DEBUGF("%s\n", s); }
+	inline void INS_DEBUG(uint8_t v, uint8_t b = 10) { INS_DEBUGF(b == 16 ? "%hhX\n" : "%hhu\n", v); }
+	inline void INS_DEBUG(int v, uint8_t b = 10) { INS_DEBUGF(b == 16 ? "%X\n" : "%d\n", v); }
+	inline void INS_DEBUG(unsigned v, uint8_t b = 10) { INS_DEBUGF(b == 16 ? "%Xn" : "%u\n", v); }
+	inline void INS_DEBUG(long v, uint8_t b = 10) { INS_DEBUGF(b == 16 ? "%lX\n" : "%ld\n", v); }
+	inline void INS_DEBUG(unsigned long v, uint8_t b = 10) { INS_DEBUGF(b == 16 ? "%lX\n" : "%lu\n", v); }
+#	ifdef UNIT_TEST
+#		define DEC 10
+#		define HEX 16
+#		include <assert.h>
+#		define INS_ASSERT(c) (assert(c))
+#	else
+#		define INS_ASSERT(c) do{if(!(c)){Serial.println("INS_ASSERT("#c") failed!");InsError(*(uint32_t*)"asrt");}}while(0)
+#	endif
+#else
+#	define INS_DEBUGF(...) ((void)0)
+#	define INS_DEBUG(...) ((void)0)
+#	define INS_ASSERT(c) ((void)0)
+#endif
+
 namespace inseparates
 {
 
@@ -99,9 +121,9 @@ public:
 
 	bool empty() const { return !(_pos < kBufferLength && _string[_pos]); }
 
-	void flush() { while(!empty()) SteppedTask_step(0); }
+	void flush() { while(!empty()) SteppedTask_step(); }
 
-	uint16_t SteppedTask_step(uint32_t /*now*/) override
+	uint16_t SteppedTask_step() override
 	{
 #if AVR
 		if (!(UCSR0A & (1 << UDRE0)))

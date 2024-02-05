@@ -84,7 +84,7 @@ TEST(RxTest, SIRC)
 
 	Delegate delegate(receivedData, receivedBits);
 
-	RxSIRC sircDecoder(pin, HIGH, &delegate);
+	RxSIRC sircDecoder(HIGH, &delegate);
 
 	uint16_t startDelay = 4321;
 	uint32_t data = 0x80001;
@@ -97,7 +97,7 @@ TEST(RxTest, SIRC)
 	Scheduler::run(&tx1);
 	for (unsigned i = 0; i < g_digitalWriteStateLog[pin].size(); i++)
 	{
-		sircDecoder.inputChanged(g_digitalWriteStateLog[pin][i], g_digitalWriteTimeLog[pin][i]);
+		sircDecoder.Decoder_pulse(1 ^ g_digitalWriteStateLog[pin][i], g_digitalWriteTimeLog[pin][i]);
 	}
 	EXPECT_EQ(data, receivedData);
 	EXPECT_EQ(20, receivedBits);
@@ -110,7 +110,7 @@ TEST(RxTest, SIRC)
 	Scheduler::run(&tx1);
 	for (unsigned i = 0; i < g_digitalWriteStateLog[pin].size(); i++)
 	{
-		sircDecoder.inputChanged(g_digitalWriteStateLog[pin][i], g_digitalWriteTimeLog[pin][i]);
+		sircDecoder.Decoder_pulse(1 ^ g_digitalWriteStateLog[pin][i], g_digitalWriteTimeLog[pin][i]);
 	}
 	EXPECT_EQ(data, receivedData);
 	EXPECT_EQ(20, receivedBits);
@@ -123,7 +123,7 @@ TEST(RxTest, SIRC)
 	Scheduler::run(&tx1);
 	for (unsigned i = 0; i < g_digitalWriteStateLog[pin].size(); i++)
 	{
-		sircDecoder.inputChanged(g_digitalWriteStateLog[pin][i], g_digitalWriteTimeLog[pin][i]);
+		sircDecoder.Decoder_pulse(1 ^ g_digitalWriteStateLog[pin][i], g_digitalWriteTimeLog[pin][i]);
 	}
 	EXPECT_EQ(data, receivedData);
 	EXPECT_EQ(20, receivedBits);
@@ -136,7 +136,7 @@ TEST(RxTest, SIRC)
 	Scheduler::run(&tx1);
 	for (unsigned i = 0; i < g_digitalWriteStateLog[pin].size(); i++)
 	{
-		sircDecoder.inputChanged(g_digitalWriteStateLog[pin][i], g_digitalWriteTimeLog[pin][i]);
+		sircDecoder.Decoder_pulse(1 ^ g_digitalWriteStateLog[pin][i], g_digitalWriteTimeLog[pin][i]);
 	}
 	EXPECT_EQ(data, receivedData);
 	EXPECT_EQ(20, receivedBits);

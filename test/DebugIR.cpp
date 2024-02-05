@@ -2,6 +2,8 @@
 
 // Command line host application for easier debugging in source-level debuggers.
 
+#define INS_DEBUGGING 1
+
 #include "../src/ProtocolBeo36.h"
 #include "../src/ProtocolDatalink80.h"
 #include "../src/ProtocolDatalink86.h"
@@ -36,62 +38,72 @@ int main()
 
 		Delegate delegate;
 
-		RxBeo36 beoDecoder(1, HIGH, &delegate);
+		RxBeo36 beoDecoder(LOW, &delegate);
 
 		uint8_t pin = 7;
 
 		uint32_t data = 0x01;
 		resetLogs();
-		digitalWrite(pin, LOW);
+		digitalWrite(pin, HIGH);
 		delayMicroseconds(datalinkStartDelay);
 		PushPullPinWriter pinWriter(pin);
-		TxBeo36 tx1(&pinWriter, HIGH);
+		TxBeo36 tx1(&pinWriter, LOW);
 		tx1.prepare(data);
 		Scheduler::run(&tx1);
 		for (unsigned i = 0; i < g_digitalWriteStateLog[pin].size(); i++)
 		{
-			beoDecoder.inputChanged(g_digitalWriteStateLog[pin][i], g_digitalWriteTimeLog[pin][i]);
+			beoDecoder.Decoder_pulse(1 ^ g_digitalWriteStateLog[pin][i], g_digitalWriteTimeLog[pin][i]);
 		}
 		assert(delegate.receivedData == data);
 
 		data = 0x31;
 		resetLogs();
-		digitalWrite(pin, LOW);
+		digitalWrite(pin, HIGH);
 		delayMicroseconds(datalinkStartDelay);
 		tx1.prepare(data);
 		Scheduler::run(&tx1);
 		for (unsigned i = 0; i < g_digitalWriteStateLog[pin].size(); i++)
 		{
-			beoDecoder.inputChanged(g_digitalWriteStateLog[pin][i], g_digitalWriteTimeLog[pin][i]);
+			beoDecoder.Decoder_pulse(1 ^ g_digitalWriteStateLog[pin][i], g_digitalWriteTimeLog[pin][i]);
 		}
 		assert(delegate.receivedData == data);
 
 		data = 0x15;
 		resetLogs();
-		digitalWrite(pin, LOW);
+		digitalWrite(pin, HIGH);
 		delayMicroseconds(datalinkStartDelay);
 		tx1.prepare(data);
 		Scheduler::run(&tx1);
 		for (unsigned i = 0; i < g_digitalWriteStateLog[pin].size(); i++)
 		{
-			beoDecoder.inputChanged(g_digitalWriteStateLog[pin][i], g_digitalWriteTimeLog[pin][i]);
+			beoDecoder.Decoder_pulse(1 ^ g_digitalWriteStateLog[pin][i], g_digitalWriteTimeLog[pin][i]);
 		}
 		assert(delegate.receivedData == data);
 
 		data = 0x3F;
 		resetLogs();
-		digitalWrite(pin, LOW);
+		digitalWrite(pin, HIGH);
 		delayMicroseconds(datalinkStartDelay);
 		tx1.prepare(data);
 		Scheduler::run(&tx1);
 		for (unsigned i = 0; i < g_digitalWriteStateLog[pin].size(); i++)
 		{
-			beoDecoder.inputChanged(g_digitalWriteStateLog[pin][i], g_digitalWriteTimeLog[pin][i]);
+			beoDecoder.Decoder_pulse(1 ^ g_digitalWriteStateLog[pin][i], g_digitalWriteTimeLog[pin][i]);
 		}
 		assert(delegate.receivedData == data);
 	}
 
 	// B&O Datalink 80
+	{
+		uint8_t pin = 1;
+		// All zeros
+		resetLogs();
+		PushPullPinWriter pinWriter(pin);
+		TxDatalink80 tx1(&pinWriter, LOW);
+		tx1.prepare(0x0);
+		Scheduler::run(&tx1);
+		assert(100000 == totalDelay());
+	}
 	{
 		class Delegate : public RxDatalink80::Delegate
 		{
@@ -115,75 +127,70 @@ int main()
 
 		Delegate delegate;
 
-		RxDatalink80 datalinkDecoder(1, LOW, &delegate);
-
 		uint8_t pin = 7;
+		RxDatalink80 datalinkDecoder(LOW, &delegate);
 
 		uint32_t data = 0x41;
 		resetLogs();
-		digitalWrite(pin, LOW);
 		delayMicroseconds(datalinkStartDelay);
 		PushPullPinWriter pinWriter(pin);
-		TxDatalink80 tx1(&pinWriter, HIGH);
+		TxDatalink80 tx1(&pinWriter, LOW);
 		tx1.prepare(data);
 		Scheduler::run(&tx1);
 		for (unsigned i = 0; i < g_digitalWriteStateLog[pin].size(); i++)
 		{
-			datalinkDecoder.inputChanged(g_digitalWriteStateLog[pin][i], g_digitalWriteTimeLog[pin][i]);
+			datalinkDecoder.Decoder_pulse(1 ^ g_digitalWriteStateLog[pin][i], g_digitalWriteTimeLog[pin][i]);
 		}
-		delayMicroseconds(30000);
-		datalinkDecoder.SteppedTask_step(micros());
+		datalinkDecoder.Decoder_timeout(g_digitalWriteStateLog[pin].back());
+		assert(totalDelay() - datalinkStartDelay == 100000);
 		assert(delegate.receivedData.size() == 2 &&
 			   delegate.receivedData[0] == data &&
 			   delegate.receivedData[1] == data);
 
-		data = 0x2A;
+		data = 0x0;
 		resetLogs();
-		digitalWrite(pin, LOW);
 		delayMicroseconds(datalinkStartDelay);
 		tx1.prepare(data);
 		Scheduler::run(&tx1);
 		datalinkDecoder.reset();
 		for (unsigned i = 0; i < g_digitalWriteStateLog[pin].size(); i++)
 		{
-			datalinkDecoder.inputChanged(g_digitalWriteStateLog[pin][i], g_digitalWriteTimeLog[pin][i]);
+			datalinkDecoder.Decoder_pulse(1 ^ g_digitalWriteStateLog[pin][i], g_digitalWriteTimeLog[pin][i]);
 		}
-		delayMicroseconds(30000);
-		datalinkDecoder.SteppedTask_step(micros());
+		datalinkDecoder.Decoder_timeout(g_digitalWriteStateLog[pin].back());
+		assert(totalDelay() - datalinkStartDelay == 100000);
 		assert(delegate.receivedData.size() == 4 &&
 			   delegate.receivedData[2] == data &&
 			   delegate.receivedData[3] == data);
 
 		data = 0x7F;
 		resetLogs();
-		digitalWrite(pin, LOW);
 		delayMicroseconds(datalinkStartDelay);
 		tx1.prepare(data);
 		Scheduler::run(&tx1);
 		datalinkDecoder.reset();
 		for (unsigned i = 0; i < g_digitalWriteStateLog[pin].size(); i++)
 		{
-			datalinkDecoder.inputChanged(g_digitalWriteStateLog[pin][i], g_digitalWriteTimeLog[pin][i]);
+			datalinkDecoder.Decoder_pulse(1 ^ g_digitalWriteStateLog[pin][i], g_digitalWriteTimeLog[pin][i]);
 		}
-		delayMicroseconds(30000);
-		datalinkDecoder.SteppedTask_step(micros());
+		datalinkDecoder.Decoder_timeout(g_digitalWriteStateLog[pin].back());
+		assert(totalDelay() - datalinkStartDelay == 100000);
 		assert(delegate.receivedData.size() == 6 &&
 			   delegate.receivedData[4] == data &&
 			   delegate.receivedData[5] == data);
 
-		data = 0x0;
+		data = 0x2A;
 		resetLogs();
-		digitalWrite(pin, LOW);
 		delayMicroseconds(datalinkStartDelay);
 		tx1.prepare(data);
 		Scheduler::run(&tx1);
 		datalinkDecoder.reset();
 		for (unsigned i = 0; i < g_digitalWriteStateLog[pin].size(); i++)
 		{
-			datalinkDecoder.inputChanged(g_digitalWriteStateLog[pin][i], g_digitalWriteTimeLog[pin][i]);
+			datalinkDecoder.Decoder_pulse(1 ^ g_digitalWriteStateLog[pin][i], g_digitalWriteTimeLog[pin][i]);
 		}
-		delayMicroseconds(30000);
-		datalinkDecoder.SteppedTask_step(micros());
+		datalinkDecoder.Decoder_timeout(g_digitalWriteStateLog[pin].back());
+		assert(totalDelay() - datalinkStartDelay == 100000);
 		assert(delegate.receivedData.size() == 8 &&
 			   delegate.receivedData[6] == data &&
 			   delegate.receivedData[7] == data);
@@ -210,7 +217,7 @@ int main()
 
 		Delegate delegate;
 
-		RxDatalink86 datalinkDecoder(1, LOW, &delegate);
+		RxDatalink86 datalinkDecoder(LOW, &delegate);
 
 		uint8_t bits = 16;
 		uint8_t pin = 7;
@@ -220,38 +227,38 @@ int main()
 		digitalWrite(pin, HIGH);
 		delayMicroseconds(datalinkStartDelay);
 		PushPullPinWriter pinWriter(pin);
-		TxDatalink86 tx1(&pinWriter, HIGH);
+		TxDatalink86 tx1(&pinWriter, LOW);
 		tx1.prepare(data, bits, false, false);
 		Scheduler::run(&tx1);
 		for (unsigned i = 0; i < g_digitalWriteStateLog[pin].size(); i++)
 		{
-			datalinkDecoder.inputChanged(g_digitalWriteStateLog[pin][i], g_digitalWriteTimeLog[pin][i]);
+			datalinkDecoder.Decoder_pulse(1 ^ g_digitalWriteStateLog[pin][i], g_digitalWriteTimeLog[pin][i]);
 		}
 		assert(delegate.receivedData == data);
 		assert(delegate.receivedBits == bits);
 
 		data = 0x3011;
 		resetLogs();
-		digitalWrite(pin, LOW);
+		digitalWrite(pin, HIGH);
 		delayMicroseconds(datalinkStartDelay);
 		tx1.prepare(data, bits, false, false);
 		Scheduler::run(&tx1);
 		for (unsigned i = 0; i < g_digitalWriteStateLog[pin].size(); i++)
 		{
-			datalinkDecoder.inputChanged(g_digitalWriteStateLog[pin][i], g_digitalWriteTimeLog[pin][i]);
+			datalinkDecoder.Decoder_pulse(1 ^ g_digitalWriteStateLog[pin][i], g_digitalWriteTimeLog[pin][i]);
 		}
 		assert(delegate.receivedData == data);
 		assert(delegate.receivedBits == bits);
 
 		data = 0x3A5F;
 		resetLogs();
-		digitalWrite(pin, LOW);
+		digitalWrite(pin, HIGH);
 		delayMicroseconds(datalinkStartDelay);
 		tx1.prepare(data, bits, false, false);
 		Scheduler::run(&tx1);
 		for (unsigned i = 0; i < g_digitalWriteStateLog[pin].size(); i++)
 		{
-			datalinkDecoder.inputChanged(g_digitalWriteStateLog[pin][i], g_digitalWriteTimeLog[pin][i]);
+			datalinkDecoder.Decoder_pulse(1 ^ g_digitalWriteStateLog[pin][i], g_digitalWriteTimeLog[pin][i]);
 		}
 		assert(delegate.receivedData == data);
 		assert(delegate.receivedBits == bits);
@@ -259,13 +266,13 @@ int main()
 		bits = 63;
 		data = 0xF355A28F;
 		resetLogs();
-		digitalWrite(pin, LOW);
+		digitalWrite(pin, HIGH);
 		delayMicroseconds(datalinkStartDelay);
 		tx1.prepare(data, bits, false, false);
 		Scheduler::run(&tx1);
 		for (unsigned i = 0; i < g_digitalWriteStateLog[pin].size(); i++)
 		{
-			datalinkDecoder.inputChanged(g_digitalWriteStateLog[pin][i], g_digitalWriteTimeLog[pin][i]);
+			datalinkDecoder.Decoder_pulse(1 ^ g_digitalWriteStateLog[pin][i], g_digitalWriteTimeLog[pin][i]);
 		}
 		assert(delegate.receivedData == data);
 		assert(delegate.receivedBits == bits);
@@ -290,7 +297,7 @@ int main()
 
 		Delegate delegate;
 
-		RxESI esiDecoder(1, HIGH, &delegate);
+		RxESI esiDecoder(HIGH, &delegate);
 
 		uint8_t pin = 7;
 
@@ -304,7 +311,7 @@ int main()
 		Scheduler::run(&tx1);
 		for (unsigned i = 0; i < g_digitalWriteStateLog[pin].size(); i++)
 		{
-			esiDecoder.inputChanged(g_digitalWriteStateLog[pin][i], g_digitalWriteTimeLog[pin][i]);
+			esiDecoder.Decoder_pulse(1 ^ g_digitalWriteStateLog[pin][i], g_digitalWriteTimeLog[pin][i]);
 		}
 		assert(delegate.receivedData == data);
 		assert(delegate.dataDelay == 50000 + esiStartDelay);
@@ -317,7 +324,7 @@ int main()
 		Scheduler::run(&tx1);
 		for (unsigned i = 0; i < g_digitalWriteStateLog[pin].size(); i++)
 		{
-			esiDecoder.inputChanged(g_digitalWriteStateLog[pin][i], g_digitalWriteTimeLog[pin][i]);
+			esiDecoder.Decoder_pulse(1 ^ g_digitalWriteStateLog[pin][i], g_digitalWriteTimeLog[pin][i]);
 		}
 		assert(delegate.receivedData == data);
 		assert(delegate.dataDelay == 50000 + esiStartDelay);
@@ -330,7 +337,7 @@ int main()
 		Scheduler::run(&tx1);
 		for (unsigned i = 0; i < g_digitalWriteStateLog[pin].size(); i++)
 		{
-			esiDecoder.inputChanged(g_digitalWriteStateLog[pin][i], g_digitalWriteTimeLog[pin][i]);
+			esiDecoder.Decoder_pulse(1 ^ g_digitalWriteStateLog[pin][i], g_digitalWriteTimeLog[pin][i]);
 		}
 		assert(delegate.receivedData == data);
 		assert(delegate.dataDelay == 50000 + esiStartDelay);
@@ -343,7 +350,7 @@ int main()
 		Scheduler::run(&tx1);
 		for (unsigned i = 0; i < g_digitalWriteStateLog[pin].size(); i++)
 		{
-			esiDecoder.inputChanged(g_digitalWriteStateLog[pin][i], g_digitalWriteTimeLog[pin][i]);
+			esiDecoder.Decoder_pulse(1 ^ g_digitalWriteStateLog[pin][i], g_digitalWriteTimeLog[pin][i]);
 		}
 		assert(delegate.receivedData == data);
 		assert(delegate.dataDelay == 50000 + esiStartDelay);
@@ -366,66 +373,66 @@ int main()
 
 		Delegate delegate;
 
-		RxNEC necDecoder(1, LOW, &delegate);
+		RxNEC necDecoder(LOW, &delegate);
 
 		uint16_t necStartDelay = 12345;
 		uint8_t pin = 7;
 
 		uint32_t data = TxNEC::encodeNEC(0, 0);
 		resetLogs();
-		digitalWrite(pin, LOW);
+		digitalWrite(pin, HIGH);
 		delayMicroseconds(necStartDelay);
 		PushPullPinWriter pinWriter(pin);
-		TxNEC tx1(&pinWriter, HIGH);
+		TxNEC tx1(&pinWriter, LOW);
 		tx1.prepare(data);
 		Scheduler::run(&tx1);
-		for (unsigned i = 0; i < g_digitalWriteStateLog[pin].size(); i++)
+		for (unsigned i = 1; i < g_digitalWriteStateLog[pin].size(); i++)
 		{
 			if (i + 1 == g_digitalWriteStateLog[pin].size())
 			{
 				// Dummy line for adding breakpoint
 				necStartDelay = 12345;
 			}
-			necDecoder.inputChanged(g_digitalWriteStateLog[pin][i], g_digitalWriteTimeLog[pin][i]);
+			necDecoder.Decoder_pulse(1 ^ g_digitalWriteStateLog[pin][i], g_digitalWriteTimeLog[pin][i]);
 		}
 		assert(delegate.receivedData == data);
 		assert(delegate.dataDelay == 110000 + necStartDelay);
 
 		data = TxNEC::encodeNEC(0xFF, 0);
 		resetLogs();
-		digitalWrite(pin, LOW);
+		digitalWrite(pin, HIGH);
 		delayMicroseconds(necStartDelay);
 		tx1.prepare(data);
 		Scheduler::run(&tx1);
 		for (unsigned i = 0; i < g_digitalWriteStateLog[pin].size(); i++)
 		{
-			necDecoder.inputChanged(g_digitalWriteStateLog[pin][i], g_digitalWriteTimeLog[pin][i]);
+			necDecoder.Decoder_pulse(1 ^ g_digitalWriteStateLog[pin][i], g_digitalWriteTimeLog[pin][i]);
 		}
 		assert(delegate.receivedData == data);
 		assert(delegate.dataDelay == 110000 + necStartDelay);
 
 		data = TxNEC::encodeNEC(0, 0xFF);
 		resetLogs();
-		digitalWrite(pin, LOW);
+		digitalWrite(pin, HIGH);
 		delayMicroseconds(necStartDelay);
 		tx1.prepare(data);
 		Scheduler::run(&tx1);
 		for (unsigned i = 0; i < g_digitalWriteStateLog[pin].size(); i++)
 		{
-			necDecoder.inputChanged(g_digitalWriteStateLog[pin][i], g_digitalWriteTimeLog[pin][i]);
+			necDecoder.Decoder_pulse(1 ^ g_digitalWriteStateLog[pin][i], g_digitalWriteTimeLog[pin][i]);
 		}
 		assert(delegate.receivedData == data);
 		assert(delegate.dataDelay == 110000 + necStartDelay);
 
 		data = TxNEC::encodeNEC(0xAA, 0x55);
 		resetLogs();
-		digitalWrite(pin, LOW);
+		digitalWrite(pin, HIGH);
 		delayMicroseconds(necStartDelay);
 		tx1.prepare(data);
 		Scheduler::run(&tx1);
 		for (unsigned i = 0; i < g_digitalWriteStateLog[pin].size(); i++)
 		{
-			necDecoder.inputChanged(g_digitalWriteStateLog[pin][i], g_digitalWriteTimeLog[pin][i]);
+			necDecoder.Decoder_pulse(1 ^ g_digitalWriteStateLog[pin][i], g_digitalWriteTimeLog[pin][i]);
 		}
 		assert(delegate.receivedData == data);
 		assert(delegate.dataDelay == 110000 + necStartDelay);
@@ -448,18 +455,18 @@ int main()
 
 		Delegate delegate;
 
-		RxRC5 rc5Decoder(1, LOW, &delegate);
+		RxRC5 rc5Decoder(HIGH, &delegate);
 
 		uint16_t rc5StartDelay = 4321;
 		uint8_t pin = 6;
 
 		// Example RC5 data (14 bits)
 		bool rc5Data[20] = { 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0  };
-		uint16_t pulseTimes[20] = { 5678, 888, 888, 1776, 888, 888, 888, 888, 1776, 1776, 1776, 888, 888, 888, 888, 1776, 1776, 1776, 1776, 888 };
+		uint16_t pulseWidths[20] = { 5678, 888, 888, 1776, 888, 888, 888, 888, 1776, 1776, 1776, 888, 888, 888, 888, 1776, 1776, 1776, 1776, 888 };
 
 		for (int i = 0; i < 20; i++)
 		{
-			rc5Decoder.inputChanged(rc5Data[i], pulseTimes[i]);
+			rc5Decoder.Decoder_pulse(1 ^ rc5Data[i], pulseWidths[i]);
 		}
 
 		assert(delegate.receivedData == 0x3175);
@@ -474,7 +481,7 @@ int main()
 		Scheduler::run(&tx1);
 		for (unsigned i = 0; i < g_digitalWriteStateLog[pin].size(); i++)
 		{
-			rc5Decoder.inputChanged(g_digitalWriteStateLog[pin][i], g_digitalWriteTimeLog[pin][i]);
+			rc5Decoder.Decoder_pulse(1 ^ g_digitalWriteStateLog[pin][i], g_digitalWriteTimeLog[pin][i]);
 		}
 		assert(delegate.receivedData == data);
 
@@ -486,7 +493,7 @@ int main()
 		Scheduler::run(&tx1);
 		for (unsigned i = 0; i < g_digitalWriteStateLog[pin].size(); i++)
 		{
-			rc5Decoder.inputChanged(g_digitalWriteStateLog[pin][i], g_digitalWriteTimeLog[pin][i]);
+			rc5Decoder.Decoder_pulse(1 ^ g_digitalWriteStateLog[pin][i], g_digitalWriteTimeLog[pin][i]);
 		}
 		assert(delegate.receivedData == data);
 
@@ -498,7 +505,7 @@ int main()
 		Scheduler::run(&tx1);
 		for (unsigned i = 0; i < g_digitalWriteStateLog[pin].size(); i++)
 		{
-			rc5Decoder.inputChanged(g_digitalWriteStateLog[pin][i], g_digitalWriteTimeLog[pin][i]);
+			rc5Decoder.Decoder_pulse(1 ^ g_digitalWriteStateLog[pin][i], g_digitalWriteTimeLog[pin][i]);
 		}
 		assert(delegate.receivedData == data);
 
@@ -510,7 +517,7 @@ int main()
 		Scheduler::run(&tx1);
 		for (unsigned i = 0; i < g_digitalWriteStateLog[pin].size(); i++)
 		{
-			rc5Decoder.inputChanged(g_digitalWriteStateLog[pin][i], g_digitalWriteTimeLog[pin][i]);
+			rc5Decoder.Decoder_pulse(1 ^ g_digitalWriteStateLog[pin][i], g_digitalWriteTimeLog[pin][i]);
 		}
 		assert(delegate.receivedData == data);
 
@@ -543,16 +550,16 @@ int main()
 		uint16_t sircStartDelay = 4321;
 		Delegate delegate;
 
-		RxSIRC sircDecoder(1, LOW, &delegate);
+		RxSIRC sircDecoder(LOW, &delegate);
 
 		uint8_t pin = 7;
 
 		uint32_t data = 0x80001;
 		resetLogs();
-		digitalWrite(pin, LOW);
+		digitalWrite(pin, HIGH);
 		delayMicroseconds(sircStartDelay);
 		PushPullPinWriter pinWriter(pin);
-		TxSIRC tx1(&pinWriter, HIGH);
+		TxSIRC tx1(&pinWriter, LOW);
 		tx1.prepare(data, 20);
 		Scheduler::run(&tx1);
 		for (unsigned i = 0; i < g_digitalWriteStateLog[pin].size(); i++)
@@ -562,48 +569,48 @@ int main()
 				// Dummy line for adding breakpoint
 				sircStartDelay = 4321;
 			}
-			sircDecoder.inputChanged(g_digitalWriteStateLog[pin][i], g_digitalWriteTimeLog[pin][i]);
+			sircDecoder.Decoder_pulse(1 ^ g_digitalWriteStateLog[pin][i], g_digitalWriteTimeLog[pin][i]);
 		}
 		assert(delegate.receivedData == data);
 		assert(delegate.receivedBits == 20);
 
 		data = 0x8A1;
 		resetLogs();
-		digitalWrite(pin, LOW);
+		digitalWrite(pin, HIGH);
 		delayMicroseconds(sircStartDelay);
 		tx1.prepare(data, 12);
 		Scheduler::run(&tx1);
 		for (unsigned i = 0; i < g_digitalWriteStateLog[pin].size(); i++)
 		{
-			sircDecoder.inputChanged(g_digitalWriteStateLog[pin][i], g_digitalWriteTimeLog[pin][i]);
+			sircDecoder.Decoder_pulse(1 ^ g_digitalWriteStateLog[pin][i], g_digitalWriteTimeLog[pin][i]);
 		}
 		delayMicroseconds(sircStartDelay);
-		sircDecoder.SteppedTask_step(micros());
+		sircDecoder.Decoder_timeout(g_digitalWriteStateLog[pin].back());
 		assert(delegate.receivedData == data);
 		assert(delegate.receivedBits == 12);
 
 		data = 0x30FFF;
 		resetLogs();
-		digitalWrite(pin, LOW);
+		digitalWrite(pin, HIGH);
 		delayMicroseconds(sircStartDelay);
 		tx1.prepare(data, 20);
 		Scheduler::run(&tx1);
 		for (unsigned i = 0; i < g_digitalWriteStateLog[pin].size(); i++)
 		{
-			sircDecoder.inputChanged(g_digitalWriteStateLog[pin][i], g_digitalWriteTimeLog[pin][i]);
+			sircDecoder.Decoder_pulse(1 ^ g_digitalWriteStateLog[pin][i], g_digitalWriteTimeLog[pin][i]);
 		}
 		assert(delegate.receivedData == data);
 		assert(delegate.receivedBits == 20);
 
 		data = 0x355A2;
 		resetLogs();
-		digitalWrite(pin, LOW);
+		digitalWrite(pin, HIGH);
 		delayMicroseconds(sircStartDelay);
 		tx1.prepare(data, 20);
 		Scheduler::run(&tx1);
 		for (unsigned i = 0; i < g_digitalWriteStateLog[pin].size(); i++)
 		{
-			sircDecoder.inputChanged(g_digitalWriteStateLog[pin][i], g_digitalWriteTimeLog[pin][i]);
+			sircDecoder.Decoder_pulse(1 ^ g_digitalWriteStateLog[pin][i], g_digitalWriteTimeLog[pin][i]);
 		}
 		assert(delegate.receivedData == data);
 		assert(delegate.receivedBits == 20);

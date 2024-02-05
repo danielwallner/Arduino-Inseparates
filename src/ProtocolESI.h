@@ -7,10 +7,12 @@
 // Measured waveforms can be found in extra/pictures/ESI*.png
 // Note that these waveforms are inverted compared to what's on the actual connector.
 // The ESI bus is active high (5V) open collector!
+// Set mark to HIGH to replicate this.
 
 // The repeat rate is unknown but is set here to 50 ms which is about twice the message length.
 
 #include "ProtocolUtils.h"
+#include "DebugUtils.h"
 
 namespace inseparates
 {
@@ -23,14 +25,14 @@ class TxESI : public SteppedTask
 
 	uint32_t _data;
 	PinWriter *_pin;
-	uint8_t _markVal;
+	uint8_t _mark;
 	bool _state; // true -> mark
 	bool _current;
 	uint8_t _count;
-	uint16_t _startMicros;
+	uint16_t _microsAccumulator;
 public:
-	TxESI(PinWriter *pin, uint8_t markVal) :
-		_pin(pin), _markVal(markVal), _state(false), _count(-1)
+	TxESI(PinWriter *pin, uint8_t mark) :
+		_pin(pin), _mark(mark), _state(false), _count(-1)
 	{
 	}
 
@@ -48,29 +50,33 @@ public:
 	// Note that bits 24 to 27 must be 0.
 	static inline uint32_t encodeRC5(uint8_t upper, uint8_t toggle, uint8_t address, uint8_t command) { return (uint32_t(upper) << 16) | (address << 8) | (toggle << 7) | command; }
 
-	uint16_t SteppedTask_step(uint32_t now) override
+	uint16_t SteppedTask_step() override
 	{
 		++_count;
 		if (_count == 0)
 		{
-			_startMicros = now;
+			_microsAccumulator = 0;
 		}
 		if (_count > 58)
 		{
 			prepare(_data);
-			return Scheduler::kInvalidDelta;
+			return SteppedTask::kInvalidDelta;
 		}
 		bool bitBoundry = !(_count & 1);
 		if (bitBoundry)
 		{
 			_state = !_state;
-			_pin->write(_state ? _markVal : 1 ^ _markVal);
+			_pin->write(_state ? _mark : 1 ^ _mark);
 			if (_count == 56)
 			{
 				if (_state)
+				{
+					_microsAccumulator += kStepMicros;
 					return kStepMicros;
+				}
 				_count = 58;
-				uint16_t microsUntilRepeat = kRepeatInterval - (uint16_t(now) - _startMicros);
+				uint16_t microsUntilRepeat = kRepeatInterval - _microsAccumulator;
+				_microsAccumulator += microsUntilRepeat;
 				return microsUntilRepeat;
 			}
 			uint8_t bitnum = (55 - _count) >> 1;
@@ -79,16 +85,19 @@ public:
 			{
 				_current = bit;
 				++_count;
+				_microsAccumulator += 2 * kStepMicros;
 				return 2 * kStepMicros;
 			}
+			_microsAccumulator += kStepMicros;
 			return kStepMicros;
 		}
 		if (_count >= 57)
 		{
 			_state = !_state;
-			_pin->write(_state ? _markVal : 1 ^_markVal);
+			_pin->write(_state ? _mark : 1 ^_mark);
 			_count = 58;
-			uint16_t microsUntilRepeat = kRepeatInterval - (uint16_t(now) - _startMicros);
+			uint16_t microsUntilRepeat = kRepeatInterval - _microsAccumulator;
+			_microsAccumulator += microsUntilRepeat;
 			return microsUntilRepeat;
 		}
 		uint8_t bitnum = (55 - _count) >> 1;
@@ -96,20 +105,22 @@ public:
 		if (bit == _current)
 		{
 			_state = !_state;
-			_pin->write(_state ? _markVal : 1 ^_markVal);
+			_pin->write(_state ? _mark : 1 ^_mark);
 		}
 		else
 		{
 			_current = bit;
 		}
+		_microsAccumulator += kStepMicros;
 		return kStepMicros;
 	}
 };
 
 
-// Does not handle a zero start bit (which is not valid RC-5)
-class RxESI : public SteppedTask
+class RxESI : public Decoder
 {
+	static const uint16_t kTimeout = 3 * TxESI::kStepMicros;
+
 public:
 	class Delegate
 	{
@@ -118,9 +129,7 @@ public:
 	};
 
 private:
-	InputFilter _inputHandler;
-	uint8_t _pin;
-	uint8_t _markVal;
+	uint8_t _mark;
 	Delegate *_delegate;
 	uint32_t _data;
 	bool _toggled;
@@ -128,8 +137,8 @@ private:
 	uint8_t _count;
 
 public:
-	RxESI(uint8_t pin, uint8_t markVal, Delegate *delegate) :
-		_pin(pin), _markVal(markVal), _delegate(delegate)
+	RxESI(uint8_t mark, Delegate *delegate) :
+		_mark(mark), _delegate(delegate)
 	{
 		reset();
 	}
@@ -142,43 +151,35 @@ public:
 		_count = -1;
 	}
 
-	uint16_t SteppedTask_step(uint32_t now) override
-	{
-		uint8_t pinValue = digitalRead(_pin);
-		if (!_inputHandler.setState(pinValue == _markVal))
-		{
-			if (_count != uint8_t(-1) && _inputHandler.getTimeSinceLastTransition(now) > TxESI::kStepMicros * 4)
-			{
-				reset();
-			}
-			return 20;
-		}
-		// Input has changed.
-		bool state = _inputHandler.getPinState();
-		uint16_t pulseLength = _inputHandler.getAndUpdateTimeSinceLastTransition(now);
-		inputChanged(state, pulseLength);
-		return 20;
-	}
-
-	void inputChanged(bool pinState, uint16_t pulseTime)
+	void Decoder_timeout(uint8_t /*pinState*/) override
 	{
 		if (_count == uint8_t(-1))
 		{
-			if (!pinState)
-			{
-				return;
-			}
-			// First mark.
-			_count = 0;
+			INS_ASSERT(0);
 			return;
 		}
+		reset();
+	}
 
-		uint8_t steps = validatePulseWidth(pulseTime) ? 1 : validatePulseWidth(pulseTime >> 1) ? 2 : 0;
+	uint16_t Decoder_pulse(uint8_t pulseState, uint16_t pulseWidth) override
+	{
+		bool mark = pulseState == _mark;
+		if (_count == uint8_t(-1))
+		{
+			if (!mark)
+			{
+				return Decoder::kInvalidTimeout;
+			}
+			// First mark.
+			++_count;
+		}
+
+		uint8_t steps = validatePulseWidth(pulseWidth) ? 1 : validatePulseWidth(pulseWidth >> 1) ? 2 : 0;
 
 		if (steps == 0)
 		{
 			reset();
-			return;
+			return Decoder::kInvalidTimeout;
 		}
 
 		_count += steps;
@@ -197,17 +198,19 @@ public:
 			if (steps == 2)
 			{
 				reset();
-				return;
+				return Decoder::kInvalidTimeout;
 			}
 			_toggled = true;
 		}
 
-		if (!pinState && _count >= 56)
+		if (mark && _count >= 56)
 		{
 			if (_delegate)
 				_delegate->RxESIDelegate_data(_data);
 			reset();
+			return Decoder::kInvalidTimeout;
 		}
+		return kTimeout;
 	}
 
 private:

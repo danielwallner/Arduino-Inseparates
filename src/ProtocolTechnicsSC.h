@@ -63,7 +63,7 @@
 namespace inseparates
 {
 
-// This transmitter is different because it needs to read the output pins and must run continuously to sync with other masters.
+// This transmitter is unusual because it needs to read the output pins and must run continuously to sync with other masters.
 // The simple handshake implemented here may not work under severe load.
 class TxTechnicsSC : public SteppedTask
 {
@@ -77,16 +77,16 @@ class TxTechnicsSC : public SteppedTask
 	PinWriter *_clockPin;
 	uint8_t _dataInputPin;
 	uint8_t _clockInputPin;
-	uint8_t _markVal;
+	uint8_t _mark;
 	bool _current;
 	uint8_t _count;
-	uint32_t _lastClock;
+	uint16_t _lastClock;
 public:
-	TxTechnicsSC(PinWriter *dataPin, PinWriter *clockPin, uint8_t dataInputPin, uint8_t clockInputPin, uint8_t markVal) :
-		_dataPin(dataPin), _clockPin(clockPin), _dataInputPin(dataInputPin), _clockInputPin(clockInputPin), _markVal(markVal), _count(kIdleState)
+	TxTechnicsSC(PinWriter *dataPin, PinWriter *clockPin, uint8_t dataInputPin, uint8_t clockInputPin, uint8_t mark) :
+		_dataPin(dataPin), _clockPin(clockPin), _dataInputPin(dataInputPin), _clockInputPin(clockInputPin), _mark(mark), _count(kIdleState)
 	{
-		_clockPin->write(1 ^ _markVal);
-		_dataPin->write(_markVal);
+		_clockPin->write(1 ^ _mark);
+		_dataPin->write(_mark);
 	}
 
 	void prepare(uint32_t data)
@@ -98,8 +98,8 @@ public:
 	// This is required here since we need to be able to abort without inactivating this instance.
 	void abort(uint32_t /*data*/)
 	{
-		_clockPin->write(_markVal);
-		_dataPin->write(1 ^ _markVal);
+		_clockPin->write(_mark);
+		_dataPin->write(1 ^ _mark);
 		_count = kIdleState;
 	}
 
@@ -108,36 +108,36 @@ public:
 	// No safety belts here, can overflow!
 	static inline uint32_t encodeIR(uint8_t address, uint8_t command) { return (uint32_t(address) << 24) | (uint32_t(command) << 16) | 1; }
 
-	uint16_t SteppedTask_step(uint32_t now) override
+	uint16_t SteppedTask_step() override
 	{
 		uint8_t clockPinState = digitalRead(_clockInputPin);
-		if (clockPinState == _markVal)
-			_lastClock = now;
+		if (clockPinState == _mark)
+			_lastClock = fastMicros();
 		if (_count == kIdleState || _count == kPreparedState)
 		{
 			if (_count == kIdleState)
 			{
-				if (clockPinState == _markVal)
-					_dataPin->write(1 ^ _markVal);
+				if (clockPinState == _mark)
+					_dataPin->write(1 ^ _mark);
 				return kQuarterStepMicros;
 			}
 			if (_count == kPreparedState)
 			{
-				if (now - _lastClock < 8 * kQuarterStepMicros)
+				if (fastMicros() - _lastClock < 8 * kQuarterStepMicros)
 					return kQuarterStepMicros;
 			}
 		}
 		++_count;
 		if (_count == 0)
 		{
-			_clockPin->write(_markVal);
-			_dataPin->write(1 ^ _markVal);
+			_clockPin->write(_mark);
+			_dataPin->write(1 ^ _mark);
 			_current = true;
 			return 2 * kQuarterStepMicros;
 		}
 		else if (_count == 1)
 		{
-			if (digitalRead(_dataInputPin) == _markVal)
+			if (digitalRead(_dataInputPin) == _mark)
 			{
 				--_count;
 				// Timeout?
@@ -146,15 +146,15 @@ public:
 		}
 		if (_count == 130)
 		{
-			_clockPin->write(1 ^ _markVal);
+			_clockPin->write(1 ^ _mark);
 			return kQuarterStepMicros;
 		}
 		if (_count >= 131)
 		{
 			if (_current)
-			_dataPin->write(_markVal);
+			_dataPin->write(_mark);
 			_count = kIdleState;
-			// Normally Scheduler::kInvalidDelta should be returned here but this instance must be kept active for handshake with other masters.
+			// Normally SteppedTask::kInvalidDelta should be returned here but this instance must be kept active for handshake with other masters.
 			return kQuarterStepMicros;
 		}
 		uint8_t clockState = _count & 3;
@@ -175,15 +175,15 @@ public:
 		{
 		case 0:
 			{
-				if (clockPinState == _markVal)
+				if (clockPinState == _mark)
 				{
 					// Some other master must be yanking the clock pin. Abort.
-					_clockPin->write(1 ^ _markVal);
-					_dataPin->write(_markVal);
+					_clockPin->write(1 ^ _mark);
+					_dataPin->write(_mark);
 					_count = kPreparedState;
 					return kQuarterStepMicros;
 				}
-				_clockPin->write(_markVal);
+				_clockPin->write(_mark);
 				if (bit == _current)
 				{
 					++_count;
@@ -194,20 +194,20 @@ public:
 		case 1:
 			{
 				uint8_t dataPinState = digitalRead(_dataInputPin);
-				if ((dataPinState != _markVal) != _current)
+				if ((dataPinState != _mark) != _current)
 				{
 					// Some other master must be yanking the data pin. Abort.
-					_clockPin->write(1 ^ _markVal);
-					_dataPin->write(_markVal);
+					_clockPin->write(1 ^ _mark);
+					_dataPin->write(_mark);
 					_count = kPreparedState;
 					return kQuarterStepMicros;
 				}
-				_dataPin->write(bit ? 1 ^ _markVal : _markVal);
+				_dataPin->write(bit ? 1 ^ _mark : _mark);
 				_current = bit;
 			}
 			break;
 		case 2:
-			_clockPin->write(1 ^ _markVal);
+			_clockPin->write(1 ^ _mark);
 			++_count;
 			return 2 * kQuarterStepMicros;
 		}
@@ -215,6 +215,7 @@ public:
 	}
 };
 
+// Unlike other receivers, due to the two input pins, this is a regular SteppedTask instead of a Decoder.
 class RxTechnicsSC : public SteppedTask
 {
 public:
@@ -229,7 +230,7 @@ private:
 	InputFilter _clockInputHandler;
 	uint8_t _dataPin;
 	uint8_t _clockPin;
-	uint8_t _markVal;
+	uint8_t _mark;
 	Delegate *_delegate;
 	uint32_t _data;
 	bool _toggled;
@@ -237,8 +238,8 @@ private:
 	uint8_t _count;
 
 public:
-	RxTechnicsSC(uint8_t dataPin, uint8_t clockPin, uint8_t markVal, Delegate *delegate) :
-		_dataPin(dataPin), _clockPin(clockPin), _markVal(markVal), _delegate(delegate)
+	RxTechnicsSC(uint8_t dataPin, uint8_t clockPin, uint8_t mark, Delegate *delegate) :
+		_dataPin(dataPin), _clockPin(clockPin), _mark(mark), _delegate(delegate)
 	{
 		reset();
 	}
@@ -251,14 +252,14 @@ public:
 		_count = -1;
 	}
 
-	uint16_t SteppedTask_step(uint32_t now) override
+	uint16_t SteppedTask_step() override
 	{
 		uint8_t dataValue = digitalRead(_dataPin);
 		uint8_t clockValue = digitalRead(_clockPin);
-		_dataInputHandler.setState(dataValue == _markVal);
-		if (!_clockInputHandler.setState(clockValue == _markVal))
+		_dataInputHandler.setState(dataValue == _mark);
+		if (!_clockInputHandler.setState(clockValue == _mark))
 		{
-			if (_count != uint8_t(-1) && _clockInputHandler.getTimeSinceLastTransition(now) > TxTechnicsSC::kQuarterStepMicros * 20)
+			if (_count != uint8_t(-1) && _clockInputHandler.getTimeSinceLastTransition(fastMicros()) > TxTechnicsSC::kQuarterStepMicros * 20)
 			{
 				reset();
 			}
@@ -267,12 +268,13 @@ public:
 		// Clock input has changed.
 		bool dataState = _dataInputHandler.getPinState();
 		bool clockState = _clockInputHandler.getPinState();
-		uint16_t pulseLength = _clockInputHandler.getAndUpdateTimeSinceLastTransition(now);
+		uint16_t pulseLength = _clockInputHandler.getAndUpdateTimeSinceLastTransition(fastMicros());
 		inputChanged(dataState, clockState, pulseLength);
 		return 15;
 	}
 
-	void inputChanged(bool dataState, bool clockState, uint16_t pulseTime)
+	// These are current values unlike for Decoder_pulse().
+	void inputChanged(bool dataState, bool clockState, uint16_t pulseWidth)
 	{
 		if (_count == uint8_t(-1))
 		{
@@ -286,7 +288,7 @@ public:
 
 		_count += 1;
 
-		if (_count > 1 && !validatePulseWidth(pulseTime))
+		if (_count > 1 && !validatePulseWidth(pulseWidth))
 		{
 			reset();
 			return;

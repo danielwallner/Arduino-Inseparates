@@ -1,14 +1,16 @@
 // Copyright (c) 2024 Daniel Wallner
 
-// Simultaneous receive and send
+// Simultaneous receive and send.
 
 #define INS_FAST_TIME 1
-#define DEBUG_FULL_TIMING 0
-#define DEBUG_CYCLE_TIMING 0
+#define DEBUG_FULL_TIMING 1
+#define DEBUG_CYCLE_TIMING 1
 #define DEBUG_DRY_TIMING 0
 
+#define HW_PWM 0 // Will use timer 2 on AVR.
+#define SW_PWM 0 // Define HW_PWM or SW_PWM to modulate the IR output. Direct pin loopback will not work with a modulated output.
 #define SEND_ESI 0
-#define SEND_TECHNICS_SC 1
+#define SEND_TECHNICS_SC 0
 
 #include <Inseparates.h>
 #include <DebugUtils.h>
@@ -18,15 +20,17 @@
 #include <ProtocolRC5.h>
 #include <ProtocolTechnicsSC.h>
 
-const uint16_t kIRSendPin = 10;
-const uint16_t kRC5RecvPin = 10;
-const uint16_t kESIRecvPin = 10;
-const uint16_t kTechnicsSCDataPin = 3;
-const uint16_t kTechnicsSCClockPin = 2;
+const uint16_t kIRSendPin = D3;
+const uint16_t kRC5RecvPin = D3;
+const uint16_t kESISendPin = D10;
+const uint16_t kESIRecvPin = D10;
+const uint16_t kTechnicsSCDataPin = D2;
+const uint16_t kTechnicsSCClockPin = D3;
 
 using namespace inseparates;
 
 DebugPrinter printer;
+Timekeeper timekeeper;
 Scheduler scheduler;
 
 #if DEBUG_FULL_TIMING
@@ -36,7 +40,14 @@ TimeAccumulator tAcc;
 CycleChecker cCheck;
 #endif
 
-PushPullPinWriter pinWriter(kIRSendPin);
+#if HW_PWM
+PWMPinWriter irPinWriter(kIRSendPin, LOW);
+#elif SW_PWM
+SoftPWMPinWriter irPinWriter(kIRSendPin, LOW);
+#else
+PushPullPinWriter irPinWriter(kIRSendPin);
+#endif
+PushPullPinWriter esiPinWriter(kESISendPin);
 #if SEND_TECHNICS_SC
 OpenDrainPinWriter tscDataWriter(kTechnicsSCDataPin, LOW);
 OpenDrainPinWriter tscClockWriter(kTechnicsSCClockPin, LOW);
@@ -50,7 +61,7 @@ void InsError(uint32_t error)
   Serial.print("ERROR: ");
   Serial.println(errorMsg);
   Serial.flush();
-  for(;;);
+  for(;;) yield();
 }
 
 // This task shares time with other active tasks.
@@ -66,29 +77,27 @@ class MainTask  : public SteppedTask, public RxRC5::Delegate, public RxESI::Dele
   RxESI _esiDecoder;
   RxRC5 _rc5Decoder;
   RxTechnicsSC _technicsDecoder;
-  TimeKeeper _time;
-  uint16_t encodedValue;
+  Timekeeper _time;
 
 public:
   MainTask() :
 #if SEND_ESI
-    _txESI(&pinWriter, LOW),
+    _txESI(&esiPinWriter, LOW),
 #elif SEND_TECHNICS_SC
     _txTechnicsSC(&tscDataWriter, &tscClockWriter, kTechnicsSCDataPin, kTechnicsSCClockPin, LOW),
 #else
-    _txRC5(&pinWriter, LOW),
+    _txRC5(&irPinWriter, LOW),
 #endif
-    _esiDecoder(kESIRecvPin, LOW, this),
-    _rc5Decoder(kRC5RecvPin, LOW, this),
+    _esiDecoder(LOW, this),
+    _rc5Decoder(LOW, this),
     _technicsDecoder(kTechnicsSCDataPin, kTechnicsSCClockPin, LOW, this)
   {
-    // Don't start things here since the initalization order of global variables in different translation units is unspecified.
   }
 
   void begin()
   {
-    scheduler.add(&_esiDecoder);
-    //scheduler.add(&_rc5Decoder);
+    scheduler.add(&_esiDecoder, kESIRecvPin);
+    scheduler.add(&_rc5Decoder, kRC5RecvPin);
     scheduler.add(&_technicsDecoder);
 #if SEND_TECHNICS_SC
     // TxTechnicsSC must unlike other transmitters be active always.
@@ -99,7 +108,7 @@ public:
 
   void RxESIDelegate_data(uint32_t data) override
   {
-    // Printing to serial port in these callbacks is not idea.lDebugPrinter is though better than Serial.
+    // Printing to serial port in these callbacks is not ideal. DebugPrinter is better than Serial though.
     // Only do this for debugging and know it will affect the timing of tasks!
     printer.print("ESI data: ");
     printer.println(String(data, HEX));
@@ -120,9 +129,9 @@ public:
   // This is where everything that you normally put in loop() goes.
   // Never use any form of delay here.
   // Instead return the number of microseconds to sleep before the next step. 
-  uint16_t SteppedTask_step(uint32_t now) override
+  uint16_t SteppedTask_step() override
   {
-    if (_time.millisSinceReset(now) > 400)
+    if (_time.millisSinceReset() > 400)
     {
       _time.reset();
 
@@ -135,14 +144,6 @@ public:
       static uint8_t toggle = 0;
       toggle ^= 1;
 #if SEND_ESI
-      static uint32_t i = 0;
-      static uint32_t j = 0;
-      uint32_t data = (i << 16) | j;
-      ++j;
-      if (!j)
-      {
-        ++i;
-      }
       uint32_t encodedMessage = TxESI::encodeRC5(0, toggle, address, command);
       _txESI.prepare(encodedMessage);
       scheduler.add(&_txESI);
@@ -153,12 +154,12 @@ public:
       uint32_t encodedMessage = TxTechnicsSC::encodeIR(0x00, 0x21); // Volume down.
       _txTechnicsSC.prepare(encodedMessage);
 #else
-      uin16_t encodedMessage = _txRC5.encodeRC5(toggle, address, command);
+      uint16_t encodedMessage = _txRC5.encodeRC5(toggle, address, command);
       _txRC5.prepare(encodedMessage);
       scheduler.add(&_txRC5);
 #endif
       printer.print("Will send: ");
-      printer.println(String(encodedValue, HEX));
+      printer.println(String(encodedMessage, HEX));
     }
     return 10000;
   }
@@ -172,9 +173,11 @@ void setup()
 
   while (!Serial)
     delay(50);
-  Serial.println();
-  Serial.print("IR send pin: ");
+
+  Serial.print("IR output pin: ");
   Serial.println(kIRSendPin);
+  Serial.print("ESI output pin: ");
+  Serial.println(kESISendPin);
   Serial.print("ESI input pin: ");
   Serial.println(kESIRecvPin);
   Serial.print("RC-5 input pin: ");
@@ -190,12 +193,16 @@ void setup()
   scheduler.begin();
   scheduler.add(&printer);
   mainTask.begin();
+
+#if HW_PWM || SW_PWM
+  irPinWriter.prepare(36000, 30);
+#endif
 }
 
 void loop()
 {
   // On AVR fastMicros() has microsecond resolution and micros() resolution is 4 microseconds.
-  uint32_t now = fastMicros();
+  uint16_t now = fastMicros();
 
 #if DEBUG_FULL_TIMING
   TimeInserter tInserter(tAcc, now);
@@ -204,30 +211,25 @@ void loop()
   cCheck.tick(now);
 #endif
 
-  // Never run anything that delays in loop() as that will break the timing of tasks.
+  // Never run anything that uses delays in loop() as that will break the timing of tasks.
   // (See note above about Serial.)
 #if DEBUG_DRY_TIMING
   // Not completely dry as we need to poll the printer.
   if (!printer.empty())
-    printer.SteppedTask_step(now);
+    printer.SteppedTask_step();
 #else
-  scheduler.SteppedTask_step(now);
+  scheduler.poll();
 #endif
 
+#if DEBUG_FULL_TIMING || DEBUG_CYCLE_TIMING
+  if (timekeeper.secondsSinceReset(now) < 5)
+    return;
+  timekeeper.reset();
+#endif
 #if DEBUG_FULL_TIMING
-  static uint32_t lastReport1;
-  if (now - lastReport1 >= 5000000)
-  {
-    lastReport1 = now;
-    tAcc.report(printer);
-  }
+  tAcc.report(printer);
 #endif
 #if DEBUG_CYCLE_TIMING
-  static uint32_t lastReport2;
-  if (now - lastReport2 >= 5010000)
-  {
-    lastReport2 = now;
-    cCheck.report(printer);
-  }
+  cCheck.report(printer);
 #endif
 }
