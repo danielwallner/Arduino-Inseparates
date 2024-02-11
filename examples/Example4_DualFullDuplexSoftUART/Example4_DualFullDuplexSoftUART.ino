@@ -167,7 +167,7 @@ void loop()
   scheduler.poll();
 #endif
 
-  if (timekeeper.secondsSinceReset(now) < 2)
+  if (timekeeper.microsSinceReset(now) < 2000000)
   {
     return;
   }

@@ -99,7 +99,6 @@ inline void safeDelayMicros(int32_t microsDelay)
 }
 
 // Helper for easier timekeeping when fastMicros() 16 bits are not enough.
-// If this class is instantiated as a global _start will likely not be correctly initalized until reset().
 class Timekeeper
 {
 	uint32_t _start;
@@ -115,8 +114,6 @@ public:
 		_micros32 += diff;
 	}
 	uint32_t microsSinceReset(uint16_t micros) { tick(micros); return _micros32 - _start; }
-	uint16_t millisSinceReset(uint16_t micros) { return microsSinceReset(micros) / 1000; }
-	uint16_t secondsSinceReset(uint16_t micros) { return microsSinceReset(micros) / 1000000UL; }
 
 	void tick()
 	{
@@ -124,8 +121,20 @@ public:
 		_micros32 += diff;
 	}
 	uint32_t microsSinceReset() { tick(); return _micros32 - _start; }
-	uint16_t millisSinceReset() { return microsSinceReset() / 1000; }
-	uint16_t secondsSinceReset() { return microsSinceReset() / 1000000UL; }
+};
+
+// Less resource demanding version of the Timekeeper that only use 16 bits.
+class Timekeeper16
+{
+	uint16_t _start;
+public:
+	Timekeeper16() : _start(fastMicros()) {}
+
+	void reset() { _start = fastMicros(); }
+
+	uint16_t microsSinceReset(uint16_t micros) { return micros - _start; }
+
+	uint16_t microsSinceReset() { return fastMicros() - _start; }
 };
 
 }

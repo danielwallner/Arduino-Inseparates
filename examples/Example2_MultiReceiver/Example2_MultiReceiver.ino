@@ -209,7 +209,7 @@ void loop()
   scheduler.poll();
 #endif
 
-  if (timekeeper.secondsSinceReset(now) < 5)
+  if (timekeeper.microsSinceReset(now) < 5000000L)
   {
     return;
   }

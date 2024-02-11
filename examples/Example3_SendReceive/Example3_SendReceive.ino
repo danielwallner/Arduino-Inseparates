@@ -131,7 +131,7 @@ public:
   // Instead return the number of microseconds to sleep before the next step. 
   uint16_t SteppedTask_step() override
   {
-    if (_time.millisSinceReset() > 400)
+    if (_time.microsSinceReset() > 400000L)
     {
       _time.reset();
 
@@ -222,7 +222,7 @@ void loop()
 #endif
 
 #if DEBUG_FULL_TIMING || DEBUG_CYCLE_TIMING
-  if (timekeeper.secondsSinceReset(now) < 5)
+  if (timekeeper.microsSinceReset(now) < 5000000L)
     return;
   timekeeper.reset();
 #endif
