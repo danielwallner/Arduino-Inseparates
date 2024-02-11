@@ -12,6 +12,9 @@
 #define INS_SEQUENCER_MAX_NUM_INPUTS 8
 #endif
 
+#define INS_STR_(v) #v
+#define INS_STR(v) INS_STR_(v)
+
 void InsError(uint32_t error);
 
 namespace inseparates
