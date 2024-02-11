@@ -28,16 +28,18 @@ class TxRC5 : public SteppedTask
 	uint8_t _mark;
 	uint8_t _count;
 	uint32_t _microsAccumulator;
+	bool _sleepUntilRepeat;
 public:
 	TxRC5(PinWriter *pin, uint8_t mark) :
 		_pin(pin), _mark(mark), _count(-1)
 	{
 	}
 
-	void prepare(uint32_t data)
+	void prepare(uint32_t data, bool sleepUntilRepeat = true)
 	{
 		_data = data;
 		_count = (_data >> 13) & 1 ? 0 : -1;
+		_sleepUntilRepeat = sleepUntilRepeat;
 	}
 
 	// No safety belts here, can overflow!
@@ -82,6 +84,11 @@ public:
 private:
 	uint16_t idleTimeLeft()
 	{
+		if (!_sleepUntilRepeat)
+		{
+			prepare(_data);
+			return SteppedTask::kInvalidDelta;
+		}
 		int32_t microsUntilRepeat = kRepeatInterval - _microsAccumulator;
 		if (microsUntilRepeat <= 0)
 		{

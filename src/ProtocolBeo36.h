@@ -29,16 +29,18 @@ class TxBeo36 : public SteppedTask
 	PinWriter *_pin;
 	uint8_t _mark;
 	uint8_t _count;
+	bool _sleepUntilRepeat;
 public:
 	TxBeo36(PinWriter *pin, uint8_t mark) :
 		_pin(pin), _mark(mark), _count(-1)
 	{
 	}
 
-	void prepare(uint8_t data)
+	void prepare(uint8_t data, bool sleepUntilRepeat = true)
 	{
 		_data = data << 1;
 		_count = -1;
+		_sleepUntilRepeat = sleepUntilRepeat;
 	}
 
 	uint16_t SteppedTask_step() override
@@ -58,7 +60,12 @@ public:
 		_pin->write(1 ^ _mark);
 		if (_count >= 15)
 		{
-			return 13700;
+			if (!_sleepUntilRepeat)
+			{
+				_count = -1;
+				return SteppedTask::kInvalidDelta;
+			}
+			return kIdleMicros;
 		}
 		uint8_t bitnum = _count >> 1;
 		bool thisBit = (_data >> bitnum) & 1;

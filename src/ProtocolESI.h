@@ -30,18 +30,20 @@ class TxESI : public SteppedTask
 	bool _current;
 	uint8_t _count;
 	uint16_t _microsAccumulator;
+	bool _sleepUntilRepeat;
 public:
 	TxESI(PinWriter *pin, uint8_t mark) :
 		_pin(pin), _mark(mark), _state(false), _count(-1)
 	{
 	}
 
-	void prepare(uint32_t data)
+	void prepare(uint32_t data, bool sleepUntilRepeat = true)
 	{
 		_data = data;
 		_state = false;
 		_current = true;
 		_count = -1;
+		_sleepUntilRepeat = sleepUntilRepeat;
 	}
 
 	// No safety belts here, can overflow!
@@ -74,6 +76,11 @@ public:
 					_microsAccumulator += kStepMicros;
 					return kStepMicros;
 				}
+				if (!_sleepUntilRepeat)
+				{
+					prepare(_data);
+					return SteppedTask::kInvalidDelta;
+				}
 				_count = 58;
 				uint16_t microsUntilRepeat = kRepeatInterval - _microsAccumulator;
 				_microsAccumulator += microsUntilRepeat;
@@ -95,6 +102,11 @@ public:
 		{
 			_state = !_state;
 			_pin->write(_state ? _mark : 1 ^_mark);
+			if (!_sleepUntilRepeat)
+			{
+				prepare(_data);
+				return SteppedTask::kInvalidDelta;
+			}
 			_count = 58;
 			uint16_t microsUntilRepeat = kRepeatInterval - _microsAccumulator;
 			_microsAccumulator += microsUntilRepeat;

@@ -29,6 +29,7 @@ class TxNEC : public SteppedTask
 	uint8_t _mark;
 	uint8_t _count;
 	uint32_t _microsAccumulator;
+	bool _sleepUntilRepeat;
 public:
 	TxNEC(PinWriter *pin, uint8_t mark) :
 	_pin(pin), _mark(mark), _count(-1)
@@ -36,10 +37,11 @@ public:
 	}
 
 	// Setting data to 0 sends a repeat code
-	void prepare(uint32_t data)
+	void prepare(uint32_t data, bool sleepUntilRepeat = true)
 	{
 		_data = data;
 		_count = -1;
+		_sleepUntilRepeat = sleepUntilRepeat;
 	}
 
 	static inline uint32_t encodeNEC(uint8_t address, uint8_t command) { return address | ((0xFF & ~address) << 8) | ((uint32_t)command << 16) | ((uint32_t)~command) << 24; }
@@ -85,6 +87,11 @@ public:
 private:
 	uint16_t idleTimeLeft()
 	{
+		if (!_sleepUntilRepeat)
+		{
+			_count = -1;
+			return SteppedTask::kInvalidDelta;
+		}
 		int32_t microsUntilRepeat = kRepeatInterval - _microsAccumulator;
 		if (microsUntilRepeat <= 0)
 		{

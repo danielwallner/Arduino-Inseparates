@@ -22,7 +22,7 @@ TEST(TxTest, Beo36)
 	EXPECT_THAT(ws1, testing::ElementsAreArray(g_digitalWriteStateLog[pin]));
 	std::array<uint32_t, 16> wt1 { 0, 154, 4946, 154, 4946, 154, 4946, 154, 4946, 154, 4946, 154, 4946, 154, 6946, 154 };
 	EXPECT_THAT(wt1, testing::ElementsAreArray(g_digitalWriteTimeLog[pin]));
-	EXPECT_EQ(51554, totalDelay());
+	EXPECT_EQ(51954, totalDelay());
 	resetLogs();
 	TxBeo36 tx2(&pinWriter, HIGH);
 	tx2.prepare(0x01);
@@ -31,7 +31,7 @@ TEST(TxTest, Beo36)
 	EXPECT_THAT(ws2, testing::ElementsAreArray(g_digitalWriteStateLog[pin]));
 	std::array<uint32_t, 16> wt2 { 0, 154, 4946, 154, 6946, 154, 4946, 154, 4946, 154, 4946, 154, 4946, 154, 4946, 154 };
 	EXPECT_THAT(wt2, testing::ElementsAreArray(g_digitalWriteTimeLog[pin]));
-	EXPECT_EQ(51554, totalDelay());
+	EXPECT_EQ(51954, totalDelay());
 
 	resetLogs();
 	TxBeo36 tx3(&pinWriter, HIGH);
@@ -41,13 +41,13 @@ TEST(TxTest, Beo36)
 	EXPECT_THAT(ws3, testing::ElementsAreArray(g_digitalWriteStateLog[pin]));
 	std::array<uint32_t, 16> wt3 { 0, 154, 4946, 154, 6946, 154, 4946, 154, 6946, 154, 4946, 154, 6946, 154, 4946, 154 };
 	EXPECT_THAT(wt3, testing::ElementsAreArray(g_digitalWriteTimeLog[pin]));
-	EXPECT_EQ(55554, totalDelay());
+	EXPECT_EQ(55954, totalDelay());
 
 	resetLogs();
 	Scheduler::run(&tx3);
 	EXPECT_THAT(ws3, testing::ElementsAreArray(g_digitalWriteStateLog[pin]));
 	EXPECT_THAT(wt3, testing::ElementsAreArray(g_digitalWriteTimeLog[pin]));
-	EXPECT_EQ(55554, totalDelay());
+	EXPECT_EQ(55954, totalDelay());
 }
 
 TEST(RxTest, Beo36)

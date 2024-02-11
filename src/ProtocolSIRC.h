@@ -30,17 +30,19 @@ class TxSIRC : public SteppedTask
 	uint8_t _mark;
 	uint8_t _count;
 	uint16_t _microsAccumulator;
+	bool _sleepUntilRepeat;
 public:
 	TxSIRC(PinWriter *pin, uint8_t mark) :
 		_pin(pin), _mark(mark), _count(-1)
 	{
 	}
 
-	void prepare(uint32_t data, uint8_t bits)
+	void prepare(uint32_t data, uint8_t bits, bool sleepUntilRepeat = true)
 	{
 		_data = data;
 		_bits = bits;
 		_count = -1;
+		_sleepUntilRepeat = sleepUntilRepeat;
 	}
 
 	// No safety belts here, can overflow!
@@ -64,6 +66,11 @@ public:
 		}
 		if (_count == (_bits << 1) + 1)
 		{
+			if (!_sleepUntilRepeat)
+			{
+				_count = -1;
+				return SteppedTask::kInvalidDelta;
+			}
 			uint16_t microsUntilRepeat = kRepeatInterval - _microsAccumulator;
 			_microsAccumulator += microsUntilRepeat;
 			return microsUntilRepeat;
