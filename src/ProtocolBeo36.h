@@ -77,7 +77,7 @@ public:
 
 class RxBeo36 : public Decoder
 {
-	static const uint16_t kTimeoutMicros = 14100;
+	static const uint16_t kTimeoutMicros = 2 * TxBeo36::kT2;
 
 public:
 	class Delegate
