@@ -20,6 +20,10 @@
 #include <ProtocolRC5.h>
 #include <ProtocolTechnicsSC.h>
 
+#ifndef INPUT_PULLDOWN
+#define INPUT_PULLDOWN INPUT
+#endif
+
 const uint16_t kIRSendPin = D3;
 const uint16_t kRC5RecvPin = D3;
 const uint16_t kESISendPin = D10;
@@ -47,7 +51,7 @@ SoftPWMPinWriter irPinWriter(kIRSendPin, LOW);
 #else
 PushPullPinWriter irPinWriter(kIRSendPin);
 #endif
-PushPullPinWriter esiPinWriter(kESISendPin);
+OpenDrainPinWriter esiPinWriter(kESISendPin, HIGH, INPUT_PULLDOWN);
 #if SEND_TECHNICS_SC
 OpenDrainPinWriter tscDataWriter(kTechnicsSCDataPin, LOW);
 OpenDrainPinWriter tscClockWriter(kTechnicsSCClockPin, LOW);

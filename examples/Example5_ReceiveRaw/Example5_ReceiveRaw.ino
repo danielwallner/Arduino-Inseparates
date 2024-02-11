@@ -45,6 +45,11 @@ void setup()
   while (!Serial)
     delay(50);
 
+  pinMode(kInputPin0, INPUT_PULLUP);
+#if DUAL_PIN
+  pinMode(kInputPin1, INPUT_PULLUP);
+#endif
+
 #if INS_FAST_TIME
   setupFastTime();
 #endif
