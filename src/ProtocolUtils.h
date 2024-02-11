@@ -6,7 +6,7 @@
 #include "Inseparates.h"
 
 #if ESP32 && !INS_ESP32_PWM_CHANNEL
-#define INS_ESP32_PWM_CHANNEL 0
+#define INS_ESP32_PWM_CHANNEL 2 // To not clash with tone() or IRMP
 #endif
 
 namespace inseparates
