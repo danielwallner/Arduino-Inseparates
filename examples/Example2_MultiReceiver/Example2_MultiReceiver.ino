@@ -20,13 +20,35 @@
 #include <ProtocolSIRC.h>
 #include <ProtocolTechnicsSC.h>
 
+#if !defined(D2) && defined(PD2)
+#define D2 PD2
+#endif
+#if !defined(D3) && defined(PD3)
+#define D3 PD3
+#endif
+#if !defined(D4) && defined(PD4)
+#define D4 PD4
+#endif
+#if !defined(D5) && defined(PD5)
+#define D5 PD5
+#endif
+#if !defined(D6) && defined(PD6)
+#define D6 PD6
+#endif
+#if !defined(D7) && defined(PD7)
+#define D7 PD7
+#endif
+#if !defined(D8) && defined(PB0)
+#define D8 PB0
+#endif
+
 const uint16_t kBeo36RecvPin = D4;
 const uint16_t kDatalink80RecvPin = D5;
 const uint16_t kDatalink86RecvPin = D6;
 const uint16_t kESIRecvPin = D7;
 const uint16_t kNECRecvPin = D8;
-const uint16_t kRC5RecvPin = D9;
-const uint16_t kSIRCRecvPin = D10;
+const uint16_t kRC5RecvPin = D8;
+const uint16_t kSIRCRecvPin = D8;
 const uint16_t kTechnicsSCDataPin = D2;
 const uint16_t kTechnicsSCClockPin = D3;
 

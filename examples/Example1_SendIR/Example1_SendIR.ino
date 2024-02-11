@@ -14,6 +14,10 @@
 #include <Inseparates.h>
 #include <ProtocolRC5.h>
 
+#if !defined(D3) && defined(PD3)
+#define D3 PD3
+#endif
+
 const uint16_t kIRSendPin = D3; // Use pin 3 when using HW_PWM on AVR.
 
 using namespace inseparates;

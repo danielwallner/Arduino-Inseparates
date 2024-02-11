@@ -20,14 +20,24 @@
 #include <ProtocolRC5.h>
 #include <ProtocolTechnicsSC.h>
 
+#if !defined(D2) && defined(PD2)
+#define D2 PD2
+#endif
+#if !defined(D3) && defined(PD3)
+#define D3 PD3
+#endif
+#if !defined(D8) && defined(PB0)
+#define D8 PB2
+#endif
+
 #ifndef INPUT_PULLDOWN
 #define INPUT_PULLDOWN INPUT
 #endif
 
 const uint16_t kIRSendPin = D3;
 const uint16_t kRC5RecvPin = D3;
-const uint16_t kESISendPin = D10;
-const uint16_t kESIRecvPin = D10;
+const uint16_t kESISendPin = D8;
+const uint16_t kESIRecvPin = D8;
 const uint16_t kTechnicsSCDataPin = D2;
 const uint16_t kTechnicsSCClockPin = D3;
 
@@ -104,7 +114,7 @@ public:
     scheduler.add(&_rc5Decoder, kRC5RecvPin);
     scheduler.add(&_technicsDecoder);
 #if SEND_TECHNICS_SC
-    // TxTechnicsSC must unlike other transmitters be active always.
+    // TxTechnicsSC must unlike other encoders always be active.
     scheduler.add(&_txTechnicsSC);
 #endif
     scheduler.add(this);
@@ -152,7 +162,7 @@ public:
       _txESI.prepare(encodedMessage);
       scheduler.add(&_txESI);
 #elif SEND_TECHNICS_SC
-      // TxTechnicsSC behaves different than other transmitters will be kept active once added to the scheduler.
+      // TxTechnicsSC behaves different than other encoders and will be kept active once added to the scheduler.
       if (!_txTechnicsSC.done()) // Check that we are done with the previous message.
         return 1000;
       uint32_t encodedMessage = TxTechnicsSC::encodeIR(0x00, 0x21); // Volume down.

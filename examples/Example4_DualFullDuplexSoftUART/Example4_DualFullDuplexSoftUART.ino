@@ -22,7 +22,14 @@
 #include <ProtocolUART.h>
 #include <DebugUtils.h>
 
-const uint32_t baudRate = 9600;
+#if !defined(D2) && defined(PD2)
+#define D2 PD2
+#endif
+#if !defined(D3) && defined(PD3)
+#define D3 PD3
+#endif
+
+const uint32_t baudRate = 4800;
 const uint16_t kUART1Pin = D2;
 const uint16_t kUART2Pin = D3;
 

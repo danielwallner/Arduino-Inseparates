@@ -13,6 +13,13 @@
 #include <DebugUtils.h>
 #include <ProtocolUtils.h>
 
+#if !defined(D4) && defined(PD4)
+#define D4 PD4
+#endif
+#if !defined(D5) && defined(PD5)
+#define D5 PD5
+#endif
+
 const uint16_t kInputPin0 = D4;
 #if DUAL_PIN
 const uint16_t kInputPin1 = D5;
