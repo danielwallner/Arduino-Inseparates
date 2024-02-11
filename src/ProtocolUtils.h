@@ -254,24 +254,36 @@ private:
 	uint8_t _pin;
 	Delegate *_delegate;
 	uint8_t _onState;
+	uint8_t _offState;
 	uint8_t _pinState;
+	bool _enabled = false;
 	bool _didTransition = false;
 
 public:
-	CheckingPinWriter(uint8_t pin, uint16_t step, Delegate *delegate, uint8_t onState) : _step(step), _pin(pin), _delegate(delegate), _onState(onState), _pinState(1 & (~onState)) {}
+	CheckingPinWriter(uint8_t pin, uint16_t step, Delegate *delegate, uint8_t onState, uint8_t offState = INPUT) :
+		_step(step), _pin(pin), _delegate(delegate), _onState(onState), _offState(offState), _pinState(1 & (~onState))
+	{
+		pinMode(pin, _offState);
+		digitalWrite(pin, onState);
+	}
 
 	void write(uint8_t value) override
 	{
 		if (value == _onState)
 			pinMode(_pin, OUTPUT);
 		else
-			pinMode(_pin, INPUT);
-		if (_pin != _pinState)
+			pinMode(_pin, _offState);
+		if (value != _pinState)
 		{
 			_didTransition = true;
 		}
 		_pinState = value;
 	}
+
+	void enable() { _enabled = true; }
+	void disable() { _enabled = false; }
+
+	bool enabled() { return _enabled; }
 
 	uint16_t SteppedTask_step() override
 	{
@@ -279,8 +291,9 @@ public:
 		{
 			_didTransition = false;
 		}
-		else if (digitalRead(_pin) != _pinState)
+		else if (_enabled && digitalRead(_pin) != _pinState)
 		{
+			_enabled = false;
 			_delegate->CheckingPinWriterDelegate_error(_pin);
 		}
 		return _step;
