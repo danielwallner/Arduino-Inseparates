@@ -3,6 +3,7 @@
 #ifndef _INS_DEBUG_UTILS_H_
 #define _INS_DEBUG_UTILS_H_
 
+#include "Inseparates.h"
 #include "FastTime.h"
 
 #ifdef INS_DEBUGGING
