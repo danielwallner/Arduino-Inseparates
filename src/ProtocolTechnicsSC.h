@@ -87,6 +87,11 @@ public:
 	{
 		_clockPin->write(1 ^ _mark);
 		_dataPin->write(_mark);
+#ifdef UNIT_TEST
+		// For consistency regardless of fastMicros() value here.
+		// See note about
+		_lastClock = fastMicros() - 10 * kQuarterStepMicros;
+#endif
 	}
 
 	void prepare(uint32_t data)
@@ -123,7 +128,9 @@ public:
 			}
 			if (_count == kPreparedState)
 			{
-				if (fastMicros() - _lastClock < 8 * kQuarterStepMicros)
+				// This may false trigger due to wraparound.
+				// That will delay send a bit longer than necessary.
+				if (uint16_t(fastMicros() - _lastClock) < 8 * kQuarterStepMicros)
 					return kQuarterStepMicros;
 			}
 		}
