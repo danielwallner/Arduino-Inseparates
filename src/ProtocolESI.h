@@ -4,7 +4,7 @@
 #define _INS_PROTOCOL_ESI_H_
 
 // Philips ESI bus protocol
-// Measured waveforms can be found in extra/pictures/ESI*.png
+// Measured waveforms can be found in extras/pictures/ESI*.png
 // Note that these waveforms are inverted compared to what's on the actual connector.
 // The ESI bus is active high (5V) open collector!
 // Set mark to HIGH to replicate this.

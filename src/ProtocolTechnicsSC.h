@@ -4,7 +4,7 @@
 #define _INS_PROTOCOL_TECHNICS_SC_H_
 
 // Technics System Control bus protocol
-// Measured waveforms can be found in extra/pictures/TechnicsSC*.png
+// Measured waveforms can be found in extras/pictures/TechnicsSC*.png
 // There may be several variants of this protocol.
 // This protocol was reverse engineered on ST-X902L / ST-X302L
 // In systems with these tuners, the tuner has the IR eye and forwards commands on the system control bus to the other components.
