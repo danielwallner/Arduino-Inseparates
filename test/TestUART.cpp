@@ -14,7 +14,8 @@ TEST(TxTest, UART)
 	uint8_t pin = 3;
 
 	resetLogs();
-	TxUART tx1(pin, HIGH);
+	PushPullPinWriter pinWriter(pin);
+	TxUART tx1(&pinWriter, HIGH);
 	tx1.setBaudrate(10000);
 	tx1.prepare(0x55);
 	Scheduler::run(&tx1);
@@ -25,7 +26,7 @@ TEST(TxTest, UART)
 	EXPECT_EQ(1000, totalDelay());
 
 	resetLogs();
-	TxUART tx2(pin, HIGH);
+	TxUART tx2(&pinWriter, HIGH);
 	tx2.setBaudrate(10000);
 	tx2.prepare(0x0);
 	Scheduler::run(&tx2);
@@ -36,7 +37,7 @@ TEST(TxTest, UART)
 	EXPECT_EQ(1000, totalDelay());
 
 	resetLogs();
-	TxUART tx3(pin, HIGH);
+	TxUART tx3(&pinWriter, HIGH);
 	tx3.setBaudrate(10000);
 	tx3.prepare(0xFF);
 	Scheduler::run(&tx3);
@@ -90,7 +91,8 @@ TEST(RxTest, UART)
 	uint16_t startDelay = 4321;
 	uint8_t data = 0x81;
 	resetLogs();
-	TxUART tx1(pin, HIGH);
+	PushPullPinWriter pinWriter(pin);
+	TxUART tx1(&pinWriter, HIGH);
 	delayMicroseconds(startDelay);
 	tx1.setBaudrate(10000);
 	tx1.prepare(data);

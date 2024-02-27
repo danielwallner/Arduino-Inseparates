@@ -46,7 +46,7 @@ public:
 	// Should return the updated number of microseconds to timeout.
 	virtual uint16_t Decoder_pulse(uint8_t state, uint16_t pulseWidth) = 0;
 
-	// No inout since timeout.
+	// This is called when no input transition has happend during the returned timeout.
 	virtual void Decoder_timeout(uint8_t pinState) = 0;
 };
 

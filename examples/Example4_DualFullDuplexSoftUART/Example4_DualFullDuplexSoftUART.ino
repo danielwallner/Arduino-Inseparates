@@ -4,6 +4,19 @@
 
 #include <Arduino.h>
 
+#if !defined(D2) && defined(PD2)
+#define D2 PD2
+#endif
+#if !defined(D3) && defined(PD3)
+#define D3 PD3
+#endif
+#if !defined(D4) && defined(PD4)
+#define D4 PD4
+#endif
+#if !defined(D5) && defined(PD5)
+#define D5 PD5
+#endif
+
 // These defines must be after Arduino.h to get pin definitions but before all the Inseparates headers.
 #define INS_DEBUGGING 1 // Extra debug output
 #define INS_FAST_TIME 1
@@ -15,23 +28,19 @@
 #define DEBUG_CYCLE_TIMING 1
 #define DEBUG_DRY_TIMING 0
 
-// Disabling this enables more debug printing.
+#if AVR
+#define DUAL_UARTS 0 // Also enables more debug output.
+const uint32_t baudRate = 2400;
+#else
 #define DUAL_UARTS 1
+const uint32_t baudRate = 4800;
+#endif
+const uint16_t kUART1Pin = D2;
+const uint16_t kUART2Pin = D3;
 
 #include <Inseparates.h>
 #include <ProtocolUART.h>
 #include <DebugUtils.h>
-
-#if !defined(D2) && defined(PD2)
-#define D2 PD2
-#endif
-#if !defined(D3) && defined(PD3)
-#define D3 PD3
-#endif
-
-const uint32_t baudRate = 4800;
-const uint16_t kUART1Pin = D2;
-const uint16_t kUART2Pin = D3;
 
 using namespace inseparates;
 
@@ -62,6 +71,7 @@ class FullDuplexUART  : public Scheduler::Delegate, public RxUART::Delegate
 {
   Timekeeper _timekeeper;
   uint8_t _pin;
+  PushPullPinWriter _pinWriter;
   TxUART _tx;
   RxUART _rx;
   uint8_t _sendData;
@@ -69,7 +79,8 @@ class FullDuplexUART  : public Scheduler::Delegate, public RxUART::Delegate
 public:
   FullDuplexUART(uint8_t pin) :
     _pin(pin),
-    _tx(pin, HIGH),
+    _pinWriter(pin),
+    _tx(&_pinWriter, HIGH),
     _rx(HIGH, this)
   {
     _tx.setBaudrate(baudRate);
@@ -102,13 +113,13 @@ public:
 
   void RxUARTDelegate_timingError() override
   {
-    printer.println("Timing Error");
+    printer.printf("Timing Error at: %hhu\n", _sendData);
     scheduler.remove(&_rx);
   }
 
   void RxUARTDelegate_parityError() override
   {
-    printer.println("Parity Error");
+    printer.printf("Parity Error at: %hhu\n", _sendData);
     scheduler.remove(&_rx);
   }
 
@@ -117,7 +128,7 @@ public:
     if (!scheduler.active(&_rx))
       return;
 #if !DUAL_UARTS
-    printer.printf("Will send: %hhX\n", _sendData);
+    printer.printf("%hhX\n", _sendData);
     printer.flush();
 #endif
     _tx.prepare(_sendData);

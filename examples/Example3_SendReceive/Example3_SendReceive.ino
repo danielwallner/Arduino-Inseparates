@@ -3,7 +3,7 @@
 // Simultaneous receive and send.
 
 #define INS_FAST_TIME 1
-#define DEBUG_FULL_TIMING 1
+#define DEBUG_FULL_TIMING 0
 #define DEBUG_CYCLE_TIMING 1
 #define DEBUG_DRY_TIMING 0
 

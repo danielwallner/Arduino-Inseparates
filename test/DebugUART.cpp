@@ -83,7 +83,8 @@ int main()
 		uint8_t pin = 3;
 
 		resetLogs();
-		TxUART tx1(pin, HIGH);
+		PushPullPinWriter pinWriter(pin);
+		TxUART tx1(&pinWriter, HIGH);
 		tx1.setBaudrate(10000);
 		tx1.setFormat(Parity::kEven);
 		tx1.prepare(0x55);
@@ -91,7 +92,7 @@ int main()
 		assert(1100 == totalDelay());
 
 		resetLogs();
-		TxUART tx2(pin, HIGH);
+		TxUART tx2(&pinWriter, HIGH);
 		tx2.setBaudrate(10000);
 		tx2.setFormat(Parity::kNone, 7, 3);
 		tx2.prepare(0x0);
@@ -99,7 +100,7 @@ int main()
 		assert(1100 == totalDelay());
 
 		resetLogs();
-		TxUART tx3(pin, HIGH);
+		TxUART tx3(&pinWriter, HIGH);
 		tx3.setBaudrate(10000);
 		tx3.prepare(0xFF);
 		Scheduler::run(&tx3);
@@ -121,7 +122,8 @@ int main()
 		uint16_t startDelay = 4321;
 		uint8_t data = 0x81;
 		resetLogs();
-		TxUART tx1(pin, HIGH);
+		PushPullPinWriter pinWriter(pin);
+		TxUART tx1(&pinWriter, HIGH);
 		delayMicroseconds(startDelay);
 		tx1.setBaudrate(10000);
 		tx1.prepare(data);
@@ -211,7 +213,8 @@ int main()
 
 		uint8_t data = 0x81;
 		resetLogs();
-		TxUART tx1(pin, HIGH);
+		PushPullPinWriter pinWriter(pin);
+		TxUART tx1(&pinWriter, HIGH);
 		tx1.setBaudrate(baudRate);
 		tx1.prepare(data);
 		Scheduler::run(&tx1);
@@ -290,7 +293,8 @@ int main()
 		uint8_t data = 0x81;
 		resetLogs();
 		delayMicroseconds(uartStartDelay);
-		TxUART tx1(pin, HIGH);
+		PushPullPinWriter pinWriter(pin);
+		TxUART tx1(&pinWriter, HIGH);
 		tx1.setBaudrate(baudRate);
 		tx1.setFormat(Parity::kOdd, 8);
 		rxUART.setFormat(Parity::kEven, 8);
@@ -314,7 +318,8 @@ int main()
 		uint8_t data = 0x81;
 		resetLogs();
 		delayMicroseconds(uartStartDelay);
-		TxUART tx1(pin, HIGH);
+		PushPullPinWriter pinWriter(pin);
+		TxUART tx1(&pinWriter, HIGH);
 		tx1.setBaudrate(baudRate);
 		tx1.setFormat(Parity::kOdd, 8);
 		rxUART.setFormat(Parity::kOdd, 8);
@@ -338,7 +343,8 @@ int main()
 		uint8_t data = 0x2;
 		resetLogs();
 		delayMicroseconds(uartStartDelay);
-		TxUART tx1(pin, HIGH);
+		PushPullPinWriter pinWriter(pin);
+		TxUART tx1(&pinWriter, HIGH);
 		tx1.setBaudrate(baudRate);
 		tx1.setFormat(Parity::kOdd, bits);
 		rxUART.setFormat(Parity::kOdd, bits);
@@ -365,7 +371,8 @@ int main()
 		uint8_t data = 0x2;
 		resetLogs();
 		delayMicroseconds(uartStartDelay);
-		TxUART tx1(pin, HIGH);
+		PushPullPinWriter pinWriter(pin);
+		TxUART tx1(&pinWriter, HIGH);
 		tx1.setBaudrate(baudRate);
 		tx1.setFormat(Parity::kOdd, bits);
 		rxUART.setFormat(Parity::kOdd, bits);
@@ -379,21 +386,38 @@ int main()
 	{
 		resetLogs();
 
-		static Scheduler scheduler;
+		Scheduler scheduler;
 
-		static uint8_t pin = 4;
+		uint8_t pin = 4;
 		uint8_t bits = 8;
 		uint32_t baudRate = 1200;
-		static uint8_t data = 0x2;
-		static TxUART tx1(pin, HIGH);
-		tx1.setBaudrate(baudRate);
-		tx1.setFormat(Parity::kOdd, bits);
+		uint8_t data = 0x2;
 
 		class Delegate2 : public RxUART::Delegate, public Scheduler::Delegate
 		{
+			Scheduler &_scheduler;
+			uint8_t &_data;
+			PushPullPinWriter _pinWriter;
+			TxUART _tx1;
 		public:
 			std::vector<uint8_t> receivedData;
 			uint16_t dataDelay = 0;
+
+			Delegate2(Scheduler &scheduler, uint8_t &data, uint8_t pin, uint8_t bits, uint32_t baudRate) :
+				_scheduler(scheduler),
+				_data(data),
+				_pinWriter(pin),
+				_tx1(&_pinWriter, HIGH)
+			{
+				_tx1.setBaudrate(baudRate);
+				_tx1.setFormat(Parity::kOdd, bits);
+			}
+
+			void start()
+			{
+				_tx1.prepare(_data);
+				_scheduler.add(&_tx1, this);
+			}
 
 			void RxUARTDelegate_data(uint8_t data) override
 			{
@@ -413,12 +437,12 @@ int main()
 
 			void SchedulerDelegate_done(SteppedTask */*task*/) override
 			{
-				tx1.prepare(~data);
-				scheduler.add(&tx1, this);
+				_tx1.prepare(~_data);
+				_scheduler.add(&_tx1, this);
 			}
 		};
 
-		Delegate2 delegate;
+		Delegate2 delegate(scheduler, data, pin, bits, baudRate);
 
 		RxUART rxUART(HIGH, &delegate);
 		rxUART.setBaudrate(baudRate);
@@ -432,8 +456,7 @@ int main()
 			safeDelayMicros(10);
 			if (i == 10)
 			{
-				tx1.prepare(data);
-				scheduler.add(&tx1, &delegate);
+				delegate.start();
 			}
 		}
 

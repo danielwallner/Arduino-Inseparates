@@ -51,16 +51,15 @@ private:
 	uint8_t _bits;
 	uint8_t _stopBits;
 	uint8_t _parityValue;
-	uint8_t _pin;
+	PinWriter *_pin;
 	uint8_t _mark;
 	uint8_t _count;
 
 public:
-	TxUART(uint8_t pin, uint8_t mark) :
+	TxUART(PinWriter *pin, uint8_t mark) :
 		_parity(Parity::kNone), _bits(8), _stopBits(1), _pin(pin), _mark(mark), _count(-1)
 	{
-		pinMode(pin, OUTPUT);
-		digitalWrite(pin, mark);
+		pin->write(_mark);
 	}
 
 	void setBaudrate(uint32_t baudRate)
@@ -138,7 +137,7 @@ public:
 
 			if (!sent)
 			{
-				digitalWrite(_pin, bitVal ? _mark : 1 ^ _mark);
+				_pin->write(bitVal ? _mark : 1 ^ _mark);
 				sentValue = bitVal;
 			}
 			else if (sentValue != bitVal)
@@ -174,7 +173,7 @@ private:
 
 		uint32_t maxAccumulatedValue = 255;
 
-		// Increment the number of fractional bits until the maximum accumulated value fits.
+		// Decrement the number of fractional bits until the maximum accumulated value fits.
 		while (maxAccumulatedValue < bitTimeTimes16Micros)
 		{
 			--fractionalBits;
