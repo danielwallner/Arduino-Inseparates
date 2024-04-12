@@ -61,7 +61,9 @@ SoftPWMPinWriter irPinWriter(kIRSendPin, LOW);
 #else
 PushPullPinWriter irPinWriter(kIRSendPin);
 #endif
+#if SEND_ESI
 OpenDrainPinWriter esiPinWriter(kESISendPin, HIGH, INPUT_PULLDOWN);
+#endif
 #if SEND_TECHNICS_SC
 OpenDrainPinWriter tscDataWriter(kTechnicsSCDataPin, LOW);
 OpenDrainPinWriter tscClockWriter(kTechnicsSCClockPin, LOW);
@@ -96,16 +98,17 @@ class MainTask  : public SteppedTask, public RxRC5::Delegate, public RxESI::Dele
 public:
   MainTask() :
 #if SEND_ESI
-    _txESI(&esiPinWriter, LOW),
+    _txESI(&esiPinWriter, HIGH),
 #elif SEND_TECHNICS_SC
     _txTechnicsSC(&tscDataWriter, &tscClockWriter, kTechnicsSCDataPin, kTechnicsSCClockPin, LOW),
 #else
     _txRC5(&irPinWriter, LOW),
 #endif
-    _esiDecoder(LOW, this),
+    _esiDecoder(HIGH, this),
     _rc5Decoder(LOW, this),
     _technicsDecoder(kTechnicsSCDataPin, kTechnicsSCClockPin, LOW, this)
   {
+    pinMode(kESIRecvPin, INPUT); // To turn off pull-up
   }
 
   void begin()
@@ -120,12 +123,11 @@ public:
     scheduler.add(this);
   }
 
-  void RxESIDelegate_data(uint32_t data) override
+  void RxESIDelegate_data(uint64_t data, uint8_t bits) override
   {
     // Printing to serial port in these callbacks is not ideal. DebugPrinter is better than Serial though.
     // Only do this for debugging and know it will affect the timing of tasks!
-    printer.print("ESI data: ");
-    printer.println(String(data, HEX));
+    printer.printf("ESI data: %0lx%0lx bits: %hhu\n", uint32_t(data >> 32),  uint32_t(data), bits);
   }
 
   void RxRC5Delegate_data(uint16_t data) override
@@ -158,8 +160,8 @@ public:
       static uint8_t toggle = 0;
       toggle ^= 1;
 #if SEND_ESI
-      uint32_t encodedMessage = TxESI::encodeRC5(0, toggle, address, command);
-      _txESI.prepare(encodedMessage);
+      uint64_t encodedMessage = TxESI::encodeRC5(0, toggle, address, command);
+      _txESI.prepare(encodedMessage, TxESI::kRC5MessageBits);
       scheduler.add(&_txESI);
 #elif SEND_TECHNICS_SC
       // TxTechnicsSC behaves different than other encoders and will be kept active once added to the scheduler.

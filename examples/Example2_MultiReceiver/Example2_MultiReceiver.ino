@@ -120,10 +120,9 @@ public:
     printer.println(String(bits));
   }
 
-  void RxESIDelegate_data(uint32_t data) override
+  void RxESIDelegate_data(uint64_t data, uint8_t bits) override
   {
-    printer.print("ESI: ");
-    printer.println(String(data, HEX));
+    printer.printf("ESI data: %0lx%0lx bits: %hhu\n", uint32_t(data >> 32),  uint32_t(data), bits);
   }
 
   void RxNECDelegate_data(uint32_t data) override
@@ -158,7 +157,7 @@ Delegate delegate;
 RxBeo36 beo36Decoder(LOW, &delegate);
 RxDatalink80 datalink80Decoder(LOW, &delegate);
 RxDatalink86 datalink86Decoder(LOW, &delegate);
-RxESI esiDecoder(LOW, &delegate);
+RxESI esiDecoder(HIGH, &delegate);
 RxNEC necDecoder(LOW, &delegate);
 RxRC5 rc5Decoder(LOW, &delegate);
 RxSIRC sircDecoder(LOW, &delegate);
@@ -201,6 +200,7 @@ void setup()
   scheduler.add(&beo36Decoder, kBeo36RecvPin);
   scheduler.add(&datalink80Decoder, kDatalink80RecvPin);
   scheduler.add(&datalink86Decoder, kDatalink86RecvPin);
+  pinMode(kESIRecvPin, INPUT); // To turn off pull-up
   scheduler.add(&esiDecoder, kESIRecvPin);
   scheduler.add(&technicsDecoder);
 #endif

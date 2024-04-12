@@ -283,12 +283,14 @@ int main()
 		class Delegate : public RxESI::Delegate
 		{
 		public:
-			uint32_t receivedData = 0;
+			uint64_t receivedData = 0;
+			uint8_t receivedBits = 0;
 			uint32_t dataDelay = 0;
 
-			void RxESIDelegate_data(uint32_t data) override
+			void RxESIDelegate_data(uint64_t data, uint8_t bits) override
 			{
 				receivedData = data;
+				receivedBits = bits;
 				dataDelay = totalDelay();
 			}
 		};
@@ -307,52 +309,60 @@ int main()
 		delayMicroseconds(esiStartDelay);
 		PushPullPinWriter pinWriter(pin);
 		TxESI tx1(&pinWriter, HIGH);
-		tx1.prepare(data);
+		tx1.prepare(data, 28);
 		Scheduler::run(&tx1);
 		for (unsigned i = 0; i < g_digitalWriteStateLog[pin].size(); i++)
 		{
 			esiDecoder.Decoder_pulse(1 ^ g_digitalWriteStateLog[pin][i], g_digitalWriteTimeLog[pin][i]);
 		}
+		esiDecoder.Decoder_timeout(g_digitalWriteStateLog[pin].back());
 		assert(delegate.receivedData == data);
+		assert(delegate.receivedBits == 28);
 		assert(delegate.dataDelay == 50000 + esiStartDelay);
 
 		data = 0x30011;
 		resetLogs();
 		digitalWrite(pin, LOW);
 		delayMicroseconds(esiStartDelay);
-		tx1.prepare(data);
+		tx1.prepare(data, 28);
 		Scheduler::run(&tx1);
 		for (unsigned i = 0; i < g_digitalWriteStateLog[pin].size(); i++)
 		{
 			esiDecoder.Decoder_pulse(1 ^ g_digitalWriteStateLog[pin][i], g_digitalWriteTimeLog[pin][i]);
 		}
+		esiDecoder.Decoder_timeout(g_digitalWriteStateLog[pin].back());
 		assert(delegate.receivedData == data);
+		assert(delegate.receivedBits == 28);
 		assert(delegate.dataDelay == 50000 + esiStartDelay);
 
 		data = 0x30FFF;
 		resetLogs();
 		digitalWrite(pin, LOW);
 		delayMicroseconds(esiStartDelay);
-		tx1.prepare(data);
+		tx1.prepare(data, 28);
 		Scheduler::run(&tx1);
 		for (unsigned i = 0; i < g_digitalWriteStateLog[pin].size(); i++)
 		{
 			esiDecoder.Decoder_pulse(1 ^ g_digitalWriteStateLog[pin][i], g_digitalWriteTimeLog[pin][i]);
 		}
+		esiDecoder.Decoder_timeout(g_digitalWriteStateLog[pin].back());
 		assert(delegate.receivedData == data);
+		assert(delegate.receivedBits == 28);
 		assert(delegate.dataDelay == 50000 + esiStartDelay);
 
 		data = 0x355A2;
 		resetLogs();
 		digitalWrite(pin, LOW);
 		delayMicroseconds(esiStartDelay);
-		tx1.prepare(data);
+		tx1.prepare(data, 28);
 		Scheduler::run(&tx1);
 		for (unsigned i = 0; i < g_digitalWriteStateLog[pin].size(); i++)
 		{
 			esiDecoder.Decoder_pulse(1 ^ g_digitalWriteStateLog[pin][i], g_digitalWriteTimeLog[pin][i]);
 		}
+		esiDecoder.Decoder_timeout(g_digitalWriteStateLog[pin].back());
 		assert(delegate.receivedData == data);
+		assert(delegate.receivedBits == 28);
 		assert(delegate.dataDelay == 50000 + esiStartDelay);
 	}
 

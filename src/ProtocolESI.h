@@ -5,11 +5,36 @@
 
 // Philips ESI bus protocol
 // Measured waveforms can be found in extras/pictures/ESI*.png
-// Note that these waveforms are inverted compared to what's on the actual connector.
 // The ESI bus is active high (5V) open collector!
 // Set mark to HIGH to replicate this.
 
+// No public specification exists for the ESI protocol and the information below was found by measuring the communication between an FA931 and an FT930
+
 // The repeat rate is unknown but is set here to 50 ms which is about twice the message length.
+
+// Messages of length 4,20,28 and 36 bits have been observed.
+
+// RC5 repeat messages are sent as a 0x0F 4 bit message.
+
+// 28 bit messages:
+
+//	0x2110081	Wake tuner
+//	0x010118c	Tuner standby
+
+//	RC5 translated messages as encoded by encodeRC5()
+//	  RC-5 messages received by FA931 was forwarded with upper byte set to 0x10 which seems to imply that this is a source id.
+//	  The amplifier itself did react to any value in the upper byte.
+//	  Note that bits 24 to 27 must be 0.
+
+// 36 bit messages:
+
+//	0x210401111ULL	Select Tuner (As sent by FT930)
+//	0x210401200ULL	Select Tape (The lower byte appears to be a source id and FA931 seems to accept any value here.)
+//	0x210401400ULL	Select CD
+//	0x210401500ULL	Select Phono
+//	0x210401700ULL	Select DCC
+//	0x210401900ULL	Select TV/AUX
+
 
 #include "ProtocolUtils.h"
 #include "DebugUtils.h"
@@ -23,11 +48,12 @@ class TxESI : public SteppedTask
 	static const uint16_t kStepMicros = 444;
 	static const uint16_t kRepeatInterval = 50000;
 
-	uint32_t _data;
+	uint64_t _data;
 	PinWriter *_pin;
 	uint8_t _mark;
 	bool _state; // true -> mark
 	bool _current;
+	uint8_t _bits;
 	uint8_t _count;
 	uint16_t _microsAccumulator;
 	bool _sleepUntilRepeat;
@@ -37,19 +63,18 @@ public:
 	{
 	}
 
-	void prepare(uint32_t data, bool sleepUntilRepeat = true)
+	void prepare(uint64_t data, uint8_t bits, bool sleepUntilRepeat = true)
 	{
 		_data = data;
 		_state = false;
 		_current = true;
+		_bits = bits;
 		_count = -1;
 		_sleepUntilRepeat = sleepUntilRepeat;
 	}
 
 	// No safety belts here, can overflow!
-	// The meaning of the upper byte is unknown!
-	// RC-5 messages received by a 900-series amplifier was forwarded with upper byte set to 0x10 but that does not seem to be required as it itself reacts when this is any random number.
-	// Note that bits 24 to 27 must be 0.
+	static const uint8_t kRC5MessageBits = 28;
 	static inline uint32_t encodeRC5(uint8_t upper, uint8_t toggle, uint8_t address, uint8_t command) { return (uint32_t(upper) << 16) | (address << 8) | (toggle << 7) | command; }
 
 	uint16_t SteppedTask_step() override
@@ -59,9 +84,9 @@ public:
 		{
 			_microsAccumulator = 0;
 		}
-		if (_count > 58)
+		if (_count > _bits * 2 + 2)
 		{
-			prepare(_data);
+			prepare(_data, _bits);
 			return SteppedTask::kInvalidDelta;
 		}
 		bool bitBoundry = !(_count & 1);
@@ -69,7 +94,7 @@ public:
 		{
 			_state = !_state;
 			_pin->write(_state ? _mark : 1 ^ _mark);
-			if (_count == 56)
+			if (_count == _bits * 2)
 			{
 				if (_state)
 				{
@@ -78,15 +103,15 @@ public:
 				}
 				if (!_sleepUntilRepeat)
 				{
-					prepare(_data);
+					prepare(_data, _bits);
 					return SteppedTask::kInvalidDelta;
 				}
-				_count = 58;
+				_count = _bits * 2 + 2;
 				uint16_t microsUntilRepeat = kRepeatInterval - _microsAccumulator;
 				_microsAccumulator += microsUntilRepeat;
 				return microsUntilRepeat;
 			}
-			uint8_t bitnum = (55 - _count) >> 1;
+			uint8_t bitnum = (_bits * 2 - 1 - _count) >> 1;
 			bool bit = (_data >> bitnum) & 1;
 			if (bit != _current)
 			{
@@ -98,21 +123,21 @@ public:
 			_microsAccumulator += kStepMicros;
 			return kStepMicros;
 		}
-		if (_count >= 57)
+		if (_count >= _bits * 2 + 1)
 		{
 			_state = !_state;
 			_pin->write(_state ? _mark : 1 ^_mark);
 			if (!_sleepUntilRepeat)
 			{
-				prepare(_data);
+				prepare(_data, _bits);
 				return SteppedTask::kInvalidDelta;
 			}
-			_count = 58;
+			_count = _bits * 2 + 2;
 			uint16_t microsUntilRepeat = kRepeatInterval - _microsAccumulator;
 			_microsAccumulator += microsUntilRepeat;
 			return microsUntilRepeat;
 		}
-		uint8_t bitnum = (55 - _count) >> 1;
+		uint8_t bitnum = (_bits * 2 - 1 - _count) >> 1;
 		bool bit = (_data >> bitnum) & 1;
 		if (bit == _current)
 		{
@@ -137,13 +162,13 @@ public:
 	class Delegate
 	{
 	public:
-		virtual void RxESIDelegate_data(uint32_t data) = 0;
+		virtual void RxESIDelegate_data(uint64_t data, uint8_t bits) = 0;
 	};
 
 private:
 	uint8_t _mark;
 	Delegate *_delegate;
-	uint32_t _data;
+	uint64_t _data;
 	bool _toggled;
 	bool _current;
 	uint8_t _count;
@@ -163,12 +188,18 @@ public:
 		_count = -1;
 	}
 
-	void Decoder_timeout(uint8_t /*pinState*/) override
+	void Decoder_timeout(uint8_t pinState) override
 	{
 		if (_count == uint8_t(-1))
 		{
 			INS_ASSERT(0);
 			return;
+		}
+
+		if (pinState != _mark)
+		{
+			if (_delegate)
+				_delegate->RxESIDelegate_data(_data, _count >> 1);
 		}
 		reset();
 	}
@@ -215,13 +246,6 @@ public:
 			_toggled = true;
 		}
 
-		if (mark && _count >= 56)
-		{
-			if (_delegate)
-				_delegate->RxESIDelegate_data(_data);
-			reset();
-			return Decoder::kInvalidTimeout;
-		}
 		return kTimeout;
 	}
 

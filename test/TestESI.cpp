@@ -16,7 +16,7 @@ TEST(TxTest, ESI)
 	resetLogs();
 	PushPullPinWriter pinWiter(pin);
 	TxESI tx1(&pinWiter, HIGH);
-	tx1.prepare(0x5555555);
+	tx1.prepare(0x5555555, 28);
 	Scheduler::run(&tx1);
 	std::array<uint8_t, 30> ws1 { 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0 };
 	EXPECT_THAT(ws1, testing::ElementsAreArray(g_digitalWriteStateLog[pin]));
@@ -26,7 +26,7 @@ TEST(TxTest, ESI)
 
 	resetLogs();
 	TxESI tx2(&pinWiter, HIGH);
-	tx2.prepare(0x5555554);
+	tx2.prepare(0x5555554, 28);
 	Scheduler::run(&tx2);
 	std::array<uint8_t, 30> ws2 { 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0 };
 	EXPECT_THAT(ws2, testing::ElementsAreArray(g_digitalWriteStateLog[pin]));
@@ -36,7 +36,7 @@ TEST(TxTest, ESI)
 
 	resetLogs();
 	TxESI tx3(&pinWiter, HIGH);
-	tx3.prepare(0x1 << 27);
+	tx3.prepare(0x1 << 27, 28);
 	Scheduler::run(&tx3);
 	std::array<uint8_t, 56> ws3 { 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0 };
 	EXPECT_THAT(ws3, testing::ElementsAreArray(g_digitalWriteStateLog[pin]));
@@ -55,20 +55,24 @@ TEST(RxTest, ESI)
 {
 	class Delegate : public RxESI::Delegate
 	{
-		uint32_t &receivedData;
+		uint64_t &receivedData;
+		uint8_t &receivedBits;
 	public:
-		Delegate(uint32_t &receivedData_) : receivedData(receivedData_) {}
+		Delegate(uint64_t &receivedData_, uint8_t &receivedBits_) :
+			receivedData(receivedData_), receivedBits(receivedBits_) {}
 
-		void RxESIDelegate_data(uint32_t data) override
+		void RxESIDelegate_data(uint64_t data, uint8_t bits) override
 		{
 			receivedData = data;
+			receivedBits = bits;
 		}
 	};
 
-	uint32_t receivedData;
+	uint64_t receivedData;
+	uint8_t receivedBits;
 	uint8_t pin = 6;
 
-	Delegate delegate(receivedData);
+	Delegate delegate(receivedData, receivedBits);
 
 	RxESI esiDecoder(HIGH, &delegate);
 
@@ -79,47 +83,55 @@ TEST(RxTest, ESI)
 	delayMicroseconds(startDelay);
 	PushPullPinWriter pinWiter(pin);
 	TxESI tx1(&pinWiter, HIGH);
-	tx1.prepare(data);
+	tx1.prepare(data, 28);
 	Scheduler::run(&tx1);
 	for (unsigned i = 0; i < g_digitalWriteStateLog[pin].size(); i++)
 	{
 		esiDecoder.Decoder_pulse(1 ^ g_digitalWriteStateLog[pin][i], g_digitalWriteTimeLog[pin][i]);
 	}
+	esiDecoder.Decoder_timeout(g_digitalWriteStateLog[pin].back());
 	EXPECT_EQ(data, receivedData);
+	EXPECT_EQ(28, receivedBits);
 
 	data = 0x8000000;
 	resetLogs();
 	digitalWrite(pin, LOW);
 	delayMicroseconds(startDelay);
-	tx1.prepare(data);
+	tx1.prepare(data, 28);
 	Scheduler::run(&tx1);
 	for (unsigned i = 0; i < g_digitalWriteStateLog[pin].size(); i++)
 	{
 		esiDecoder.Decoder_pulse(1 ^ g_digitalWriteStateLog[pin][i], g_digitalWriteTimeLog[pin][i]);
 	}
+	esiDecoder.Decoder_timeout(g_digitalWriteStateLog[pin].back());
 	EXPECT_EQ(data, receivedData);
+	EXPECT_EQ(28, receivedBits);
 
 	data = 0x3FFF;
 	resetLogs();
 	digitalWrite(pin, LOW);
 	delayMicroseconds(startDelay);
-	tx1.prepare(data);
+	tx1.prepare(data, 28);
 	Scheduler::run(&tx1);
 	for (unsigned i = 0; i < g_digitalWriteStateLog[pin].size(); i++)
 	{
 		esiDecoder.Decoder_pulse(1 ^ g_digitalWriteStateLog[pin][i], g_digitalWriteTimeLog[pin][i]);
 	}
+	esiDecoder.Decoder_timeout(g_digitalWriteStateLog[pin].back());
 	EXPECT_EQ(data, receivedData);
+	EXPECT_EQ(28, receivedBits);
 
 	data = 0x355A;
 	resetLogs();
 	digitalWrite(pin, LOW);
 	delayMicroseconds(startDelay);
-	tx1.prepare(data);
+	tx1.prepare(data, 28);
 	Scheduler::run(&tx1);
 	for (unsigned i = 0; i < g_digitalWriteStateLog[pin].size(); i++)
 	{
 		esiDecoder.Decoder_pulse(1 ^ g_digitalWriteStateLog[pin][i], g_digitalWriteTimeLog[pin][i]);
 	}
+	esiDecoder.Decoder_timeout(g_digitalWriteStateLog[pin].back());
 	EXPECT_EQ(data, receivedData);
+	EXPECT_EQ(28, receivedBits);
 }
