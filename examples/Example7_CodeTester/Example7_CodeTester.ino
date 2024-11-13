@@ -4,8 +4,8 @@
 // Modify address and command with W A S D or 8 4 5 6 keys.
 // Works best with a standalone serial monitor where you don't have to press enter to trigger send.
 
-// Many devices support additional commands to those available on the remote.
-// By setting the 
+// Many devices support more commands than those available on the remote.
+// Set the address to a known good value and test different commands with this sketch.
 
 #define INS_FAST_TIME 1
 
