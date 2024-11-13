@@ -117,8 +117,7 @@ public:
 
 	void tick()
 	{
-		uint16_t diff = fastMicros() - uint16_t(_micros32);
-		_micros32 += diff;
+		tick(fastMicros());
 	}
 	uint32_t microsSinceReset() { tick(); return _micros32 - _start; }
 };
