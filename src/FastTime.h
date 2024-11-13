@@ -106,7 +106,7 @@ class Timekeeper
 public:
 	Timekeeper() : _start(fastMicros()) {}
 
-	void reset() { tick(); _start = _micros32; }
+	void reset() { _start = _micros32 = 0; }
 
 	void tick(uint16_t micros)
 	{
