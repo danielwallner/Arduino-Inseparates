@@ -5,6 +5,7 @@
 
 #include "Inseparates.h"
 #include "FastTime.h"
+#include <stdarg.h>
 
 #ifdef INS_DEBUGGING
 	void INS_DEBUGF(const char *format, ...);
