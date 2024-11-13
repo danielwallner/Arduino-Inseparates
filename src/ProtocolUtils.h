@@ -39,21 +39,22 @@ class OpenDrainPinWriter : public PinWriter
 {
 	uint8_t _pin;
 	uint8_t _onState;
-	uint8_t _offState;
+	uint8_t _offMode;
 public:
-	OpenDrainPinWriter(uint8_t pin, uint8_t onState, uint8_t offState = INPUT) :
-		_pin(pin), _onState(onState), _offState(offState)
+	OpenDrainPinWriter(uint8_t pin, uint8_t onState, uint8_t offMode = INPUT) :
+		_pin(pin), _onState(onState), _offMode(offMode)
 	{
-		pinMode(pin, _offState);
+		pinMode(pin, _offMode);
 		digitalWrite(pin, onState);
 	}
 
 	void write(uint8_t value) override
 	{
+		digitalWrite(_pin, _onState);
 		if (value == _onState)
 			pinMode(_pin, OUTPUT);
 		else
-			pinMode(_pin, _offState);
+			pinMode(_pin, _offMode);
 	}
 };
 
