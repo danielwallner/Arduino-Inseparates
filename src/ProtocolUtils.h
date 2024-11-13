@@ -77,8 +77,8 @@ public:
 
 	void prepare(uint32_t frequency, uint8_t dutyCycle)
 	{
-	_frequency = frequency;
-	_dutyCycle = dutyCycle;
+		_frequency = frequency;
+		_dutyCycle = dutyCycle;
 #if AVR
 		uint16_t divisor = 1;
 		uint16_t pwmTop;
