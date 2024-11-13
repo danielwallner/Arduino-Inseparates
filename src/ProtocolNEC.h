@@ -149,6 +149,8 @@ public:
 		_repeat	= false;
 	}
 
+	static inline bool checkParity(uint32_t data) { return ((0xFF & data) ^ ((0xFF & ~(data >> 8)))) || ((0xFF & (data >> 24)) ^ ((0xFF & ~(data >> 16)))); }
+
 	void Decoder_timeout(uint8_t pinState) override
 	{
 		if (_count == uint8_t(-1))
