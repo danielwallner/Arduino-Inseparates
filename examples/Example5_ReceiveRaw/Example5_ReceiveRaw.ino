@@ -13,16 +13,41 @@
 #include <DebugUtils.h>
 #include <ProtocolUtils.h>
 
-#if !defined(D4) && defined(PD4)
-#define D4 PD4
-#endif
-#if !defined(D5) && defined(PD5)
-#define D5 PD5
+#if defined(ESP8266) // WEMOS D1 R2
+static const uint8_t D_2  = 16;
+static const uint8_t D_3  = 5;
+static const uint8_t D_4  = 4;
+static const uint8_t D_5  = 0;
+static const uint8_t D_6  = 2;
+static const uint8_t D_7  = 14;
+static const uint8_t D_8  = 12;
+static const uint8_t D_9  = 13;
+static const uint8_t D_10 = 15;
+#elif defined(ESP32) // WEMOS D1 R32
+static const uint8_t D_2  = 26;
+static const uint8_t D_3  = 25;
+static const uint8_t D_4  = 17;
+static const uint8_t D_5  = 16;
+static const uint8_t D_6  = 27;
+static const uint8_t D_7  = 14;
+static const uint8_t D_8  = 12;
+static const uint8_t D_9  = 13;
+static const uint8_t D_10 = 5;
+#else
+static const uint8_t D_2  = 2;
+static const uint8_t D_3  = 3;
+static const uint8_t D_4  = 4;
+static const uint8_t D_5  = 5;
+static const uint8_t D_6  = 6;
+static const uint8_t D_7  = 7;
+static const uint8_t D_8  = 8;
+static const uint8_t D_9  = 9;
+static const uint8_t D_10 = 10;
 #endif
 
-const uint16_t kInputPin0 = D4;
+const uint16_t kInputPin0 = D_2;
 #if DUAL_PIN
-const uint16_t kInputPin1 = D5;
+const uint16_t kInputPin1 = D_8;
 #endif
 
 const uint32_t kMaxSpaceMicros = 10000;

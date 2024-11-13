@@ -20,26 +20,48 @@
 #include <ProtocolRC5.h>
 #include <ProtocolTechnicsSC.h>
 
-#if !defined(D2) && defined(PD2)
-#define D2 PD2
-#endif
-#if !defined(D3) && defined(PD3)
-#define D3 PD3
-#endif
-#if !defined(D8) && defined(PB0)
-#define D8 PB2
+#if defined(ESP8266) // WEMOS D1 R2
+static const uint8_t D_2  = 16;
+static const uint8_t D_3  = 5;
+static const uint8_t D_4  = 4;
+static const uint8_t D_5  = 0;
+static const uint8_t D_6  = 2;
+static const uint8_t D_7  = 14;
+static const uint8_t D_8  = 12;
+static const uint8_t D_9  = 13;
+static const uint8_t D_10 = 15;
+#elif defined(ESP32) // WEMOS D1 R32
+static const uint8_t D_2  = 26;
+static const uint8_t D_3  = 25;
+static const uint8_t D_4  = 17;
+static const uint8_t D_5  = 16;
+static const uint8_t D_6  = 27;
+static const uint8_t D_7  = 14;
+static const uint8_t D_8  = 12;
+static const uint8_t D_9  = 13;
+static const uint8_t D_10 = 5;
+#else
+static const uint8_t D_2  = 2;
+static const uint8_t D_3  = 3;
+static const uint8_t D_4  = 4;
+static const uint8_t D_5  = 5;
+static const uint8_t D_6  = 6;
+static const uint8_t D_7  = 7;
+static const uint8_t D_8  = 8;
+static const uint8_t D_9  = 9;
+static const uint8_t D_10 = 10;
 #endif
 
 #ifndef INPUT_PULLDOWN
 #define INPUT_PULLDOWN INPUT
 #endif
 
-const uint16_t kIRSendPin = D3;
-const uint16_t kRC5RecvPin = D3;
-const uint16_t kESISendPin = D8;
-const uint16_t kESIRecvPin = D8;
-const uint16_t kTechnicsSCDataPin = D2;
-const uint16_t kTechnicsSCClockPin = D3;
+const uint16_t kIRSendPin = D_3;
+const uint16_t kRC5RecvPin = D_8;
+const uint16_t kESISendPin = D_10;
+const uint16_t kESIRecvPin = D_10;
+const uint16_t kTechnicsSCDataPin = D_5;
+const uint16_t kTechnicsSCClockPin = D_4;
 
 using namespace inseparates;
 

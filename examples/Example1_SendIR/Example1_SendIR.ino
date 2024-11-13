@@ -14,11 +14,18 @@
 #include <Inseparates.h>
 #include <ProtocolRC5.h>
 
-#if !defined(D3) && defined(PD3)
-#define D3 PD3
+#if defined(ESP8266)
+static const uint8_t D_3  = 5;
+static const uint8_t D_7  = 14;
+#elif defined(ESP32)
+static const uint8_t D_3  = 25;
+static const uint8_t D_7  = 14;
+#else
+static const uint8_t D_3  = 3; // Use pin 3 when using HW_PWM on AVR.
+static const uint8_t D_7  = 7;
 #endif
 
-const uint16_t kIRSendPin = D3; // Use pin 3 when using HW_PWM on AVR.
+const uint16_t kIRSendPin = D_3;
 
 using namespace inseparates;
 
