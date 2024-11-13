@@ -35,6 +35,12 @@ public:
 	virtual uint16_t SteppedTask_step() = 0;
 };
 
+class DummyTask : public SteppedTask
+{
+public:
+	uint16_t SteppedTask_step() override { return kInvalidDelta; }
+};
+
 class Decoder
 {
 public:
