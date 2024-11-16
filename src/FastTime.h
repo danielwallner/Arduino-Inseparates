@@ -37,16 +37,11 @@ inline void setupFastTime()
 
 inline uint16_t fastCount()
 {
-#if INS_SAFE_FAST_COUNT
 	uint8_t oldSREG = SREG;
 	cli();
 	uint16_t cnt = TCNT1;
 	SREG = oldSREG;
 	return cnt;
-#else
-	// If some interrupt runs that use the temp register this could fail.
-	return TCNT1;
-#endif
 }
 
 // Must must be called more often than kFastCountMaxMicros with some margin!
