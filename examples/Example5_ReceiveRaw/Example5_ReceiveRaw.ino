@@ -6,7 +6,7 @@
 
 #define INS_FAST_TIME 1
 #define DEBUG_CYCLE_TIMING 0
-#define DUAL_PIN 0
+//#define DUAL_PIN 1
 #define PRINT_ACCUMULATED_TIME 0 // Will decrease accuracy for pulses < 200 us on AVR.
 
 #include <Inseparates.h>
@@ -49,6 +49,8 @@ const uint16_t kInputPin0 = D_2;
 #if DUAL_PIN
 const uint16_t kInputPin1 = D_8;
 #endif
+#define INPUT_MODE INPUT_PULLUP
+//#define INPUT_MODE INPUT
 
 const uint32_t kMaxSpaceMicros = 10000;
 
@@ -77,9 +79,9 @@ void setup()
   while (!Serial)
     delay(50);
 
-  pinMode(kInputPin0, INPUT_PULLUP);
+  pinMode(kInputPin0, INPUT_MODE);
 #if DUAL_PIN
-  pinMode(kInputPin1, INPUT_PULLUP);
+  pinMode(kInputPin1, INPUT_MODE);
 #endif
 
 #if INS_FAST_TIME
