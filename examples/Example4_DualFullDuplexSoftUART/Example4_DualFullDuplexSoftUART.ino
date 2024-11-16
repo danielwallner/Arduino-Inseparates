@@ -4,17 +4,21 @@
 
 #include <Arduino.h>
 
-#if !defined(D2) && defined(PD2)
-#define D2 PD2
-#endif
-#if !defined(D3) && defined(PD3)
-#define D3 PD3
-#endif
-#if !defined(D4) && defined(PD4)
-#define D4 PD4
-#endif
-#if !defined(D5) && defined(PD5)
-#define D5 PD5
+#if defined(ESP8266) // WEMOS D1 R2
+static const uint8_t D_2  = 16;
+static const uint8_t D_3  = 5;
+static const uint8_t D_6  = 2;
+static const uint8_t D_7  = 14;
+#elif defined(ESP32) // WEMOS D1 R32
+static const uint8_t D_2  = 26;
+static const uint8_t D_3  = 25;
+static const uint8_t D_6  = 27;
+static const uint8_t D_7  = 14;
+#else
+static const uint8_t D_2  = 2;
+static const uint8_t D_3  = 3;
+static const uint8_t D_6  = 6;
+static const uint8_t D_7  = 7;
 #endif
 
 // These defines must be after Arduino.h to get pin definitions but before all the Inseparates headers.
@@ -22,8 +26,8 @@
 #define INS_FAST_TIME 1
 #define INS_ENABLE_INPUT_FILTER 0
 #define INS_UART_FRACTIONAL_TIME 0
-//#define INS_SAMPLE_DEBUG_PIN D4
-//#define INS_TIMEOUT_DEBUG_PIN D5
+#define INS_SAMPLE_DEBUG_PIN D_6
+#define INS_TIMEOUT_DEBUG_PIN D_7
 #define DEBUG_FULL_TIMING 0
 #define DEBUG_CYCLE_TIMING 1
 #define DEBUG_DRY_TIMING 0
@@ -35,8 +39,8 @@ const uint32_t baudRate = 2400;
 #define DUAL_UARTS 1
 const uint32_t baudRate = 4800;
 #endif
-const uint16_t kUART1Pin = D2;
-const uint16_t kUART2Pin = D3;
+const uint16_t kUART1Pin = D_2;
+const uint16_t kUART2Pin = D_3;
 
 #include <Inseparates.h>
 #include <ProtocolUART.h>
