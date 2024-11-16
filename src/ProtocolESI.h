@@ -8,7 +8,7 @@
 // The ESI bus is active high (5V) open collector!
 // Set mark to HIGH to replicate this.
 
-// No public specification exists for the ESI protocol and the information below was found by measuring the communication between an FA931 and an FT930
+// No public specification exists for the ESI protocol and the information below was found by measuring the communication between FA931 and FT930
 
 // The repeat rate is unknown but is set here to 50 ms which is about twice the message length.
 
