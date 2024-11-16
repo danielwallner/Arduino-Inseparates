@@ -4,10 +4,10 @@
 
 #define INS_FAST_TIME 1
 #define DEBUG_FULL_TIMING 0
-#define DEBUG_CYCLE_TIMING 1
+#define DEBUG_CYCLE_TIMING 0
 #define DEBUG_DRY_TIMING 0
 
-#define HW_PWM 0 // Will use timer 2 on AVR.
+#define HW_PWM 1 // Will use timer 2 on AVR.
 #define SW_PWM 0 // Define HW_PWM or SW_PWM to modulate the IR output. Direct pin loopback will not work with a modulated output.
 #define SEND_ESI 0
 #define SEND_TECHNICS_SC 0
@@ -135,6 +135,9 @@ public:
 
   void begin()
   {
+#if SW_PWM && !HW_PWM
+    scheduler.add(&irPinWriter);
+#endif
     scheduler.add(&_esiDecoder, kESIRecvPin);
     scheduler.add(&_rc5Decoder, kRC5RecvPin);
     scheduler.add(&_technicsDecoder);
@@ -196,8 +199,10 @@ public:
       _txRC5.prepare(encodedMessage);
       scheduler.add(&_txRC5);
 #endif
+#if !AVR
       printer.print("Will send: ");
       printer.println(String(encodedMessage, HEX));
+#endif
     }
     return 10000;
   }
