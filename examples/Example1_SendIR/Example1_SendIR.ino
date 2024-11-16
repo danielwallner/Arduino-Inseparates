@@ -4,28 +4,42 @@
 // Sends single messages, one at a time.
 
 #define INS_FAST_TIME 1
-#define HW_PWM 0 // Will use timer 2 on AVR.
-#define SW_PWM 1 // This requires running two tasks in parallel, see below.
+#define MODULATE 1
 
 #define TEST_PWM 0 // Sends long marks for PWM tests.
-
-#define ACTIVE HIGH
 
 #include <Inseparates.h>
 #include <ProtocolRC5.h>
 
-#if defined(ESP8266)
+#if defined(ESP8266) // WEMOS D1 R2
 static const uint8_t D_3  = 5;
-static const uint8_t D_7  = 14;
-#elif defined(ESP32)
+static const uint8_t D_8  = 12;
+#elif defined(ESP32) // WEMOS D1 R32
 static const uint8_t D_3  = 25;
-static const uint8_t D_7  = 14;
+static const uint8_t D_8  = 12;
 #else
 static const uint8_t D_3  = 3; // Use pin 3 when using HW_PWM on AVR.
-static const uint8_t D_7  = 7;
+static const uint8_t D_8  = 8;
 #endif
 
+#if MODULATE
+// Send IR
+#define HW_PWM 1 // Will use timer 2 on AVR.
+#define SW_PWM 0 // This requires running two tasks in parallel, see below.
+#define ACTIVE LOW
+#define OFF_MODE INPUT_PULLUP
 const uint16_t kIRSendPin = D_3;
+#else
+// RC-5 connector compatible signal
+#define ACTIVE HIGH
+#ifdef INPUT_PULLDOWN
+#define OFF_MODE INPUT_PULLDOWN
+#else
+#define OFF_MODE OUTPUT // Should be INPUT but that will make the pin stay high when off if there's no pull-down
+#endif
+const uint16_t kIRSendPin = D_8;
+#endif
+
 
 using namespace inseparates;
 
@@ -35,7 +49,7 @@ PWMPinWriter pinWriter(kIRSendPin, ACTIVE);
 Scheduler scheduler;
 SoftPWMPinWriter pinWriter(kIRSendPin, ACTIVE);
 #else
-OpenDrainPinWriter pinWriter(kIRSendPin, ACTIVE);
+OpenDrainPinWriter pinWriter(kIRSendPin, ACTIVE, OFF_MODE);
 #endif
 
 #if TEST_PWM
@@ -85,7 +99,7 @@ void loop()
   tx.prepare(encodedValue);
 #endif
 
-#if SW_PWM
+#if SW_PWM && !HW_PWM
   // When using software PWM we need to run two tasks in parallel.
   // That means we must run the normal scheduling mechanism.
   scheduler.add(&tx);
