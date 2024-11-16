@@ -5,9 +5,7 @@
 
 #include "Inseparates.h"
 
-#if ESP32 && !INS_ESP32_PWM_CHANNEL
-#define INS_ESP32_PWM_CHANNEL 2 // To not clash with tone() or IRMP
-#endif
+#include "PlatformTimers.h"
 
 namespace inseparates
 {
@@ -84,13 +82,12 @@ public:
 	{
 		_frequency = frequency;
 		_dutyCycle = dutyCycle;
-#if AVR
+#if defined(AVR)
 		uint16_t divisor = 1;
 		uint16_t pwmTop;
 		uint8_t p = 1;
 		for (; p <= 2; ++p)
 		{
-			Serial.println(divisor);
 			int32_t divFreq = divisor * _frequency;
 			pwmTop = (F_CPU + divFreq / 2) / divFreq;
 			if (pwmTop < 256)
@@ -104,18 +101,20 @@ public:
 		TCCR2A = (1 << WGM21) | (1 << WGM20);
 		TCCR2B = (1 << WGM22) | p; // Fast PWM mode
 		OCR2A = pwmTop - 1;
-		OCR2B = (_dutyCycle * (OCR2A + 1)) / 100;
-#elif ESP8266
-		// ESP8266 analogWrite is a software PWM that doesn't work for high frequencies.
-		if (frequency > 50000)
-			InsError(*(uint32_t*)"pfrq");
-		analogWriteRange(255);
-#elif ESP32
-		// ESP32 ledcSetup has an upper limit.
+		OCR2B = (_dutyCycle * pwmTop) / 100;
+#elif defined(ESP8266)
+		// ESP8266 analogWrite is a software PWM that doesn't work for high frequencies (Depending on CPU clock).
+		if (esp_get_cpu_freq_mhz() < 100UL)
+		{
+			if (frequency > 200000)
+				InsError(*(uint32_t*)"pfrq");
+		}
+		analogWriteRange(63);
+#elif defined(ESP32)
+		// ESP32 ledcAttach has an upper limit.
 		if (frequency > 300000)
 			InsError(*(uint32_t*)"pfrq");
-		ledcSetup(INS_ESP32_PWM_CHANNEL, _frequency, 8);
-		ledcAttachPin(_pin, INS_ESP32_PWM_CHANNEL);
+		ledcAttach(_pin, _frequency, 6);
 #endif
 	}
 
@@ -125,7 +124,7 @@ public:
 			InsError(*(uint32_t*)"hefr");
 		if (value == _onState)
 		{
-#if AVR
+#if defined(AVR)
 			uint8_t pinmode;
 			if (_onState == HIGH)
 			{
@@ -147,24 +146,24 @@ public:
 			{
 				InsError(*(uint32_t*)"tpin");
 			}
-#elif ESP8266
+#elif defined(ESP8266)
 			analogWriteFreq(_frequency);
 			if (_onState == HIGH)
 			{
-				analogWrite(_pin, _dutyCycle * 255L / 100);
+				analogWrite(_pin, _dutyCycle * 63U / 100);
 			}
 			else
 			{
-				analogWrite(_pin, (100 - _dutyCycle) * 255L / 100);
+				analogWrite(_pin, (100 - _dutyCycle) * 63U / 100);
 			}
-#elif ESP32
+#elif defined(ESP32)
 			if (_onState == HIGH)
 			{
-				ledcWrite(INS_ESP32_PWM_CHANNEL, _dutyCycle * 255L / 100);
+				ledcWrite(_pin, _dutyCycle * 63U / 100);
 			}
 			else
 			{
-				ledcWrite(INS_ESP32_PWM_CHANNEL, (100 - _dutyCycle) * 255L / 100);
+				ledcWrite(_pin, (100 - _dutyCycle) * 63U / 100);
 			}
 #else
 			// This fallback may not work as some platforms limit the frequency to 20 kHz.
@@ -174,12 +173,12 @@ public:
 		}
 		else
 		{
-#if AVR
+#if defined(AVR)
 			TCCR2A &= 0xF;
-#elif ESP8266
+#elif defined(ESP8266)
 			digitalWrite(_pin, 1 ^ _onState);
-#elif ESP32
-			ledcWrite(INS_ESP32_PWM_CHANNEL, (1 ^ _onState) * 255);
+#elif defined(ESP32)
+			ledcWrite(_pin, (1 ^ _onState) * 255);
 #else
 			noTone(_pin);
 			digitalWrite(_pin, 1 ^ _onState);
@@ -197,7 +196,7 @@ class SoftPWMPinWriter : public PinWriter, public SteppedTask
 	static const uint8_t kFractionalBits = 8;
 	const uint8_t _pin;
 	const uint8_t _onState;
-	uint8_t _modulating = false;
+	bool _modulating = false;
 	uint8_t _state;
 	uint16_t _onTime = 0;
 	uint16_t _offTime;
@@ -217,7 +216,7 @@ public:
 	}
 	void write(uint8_t value) override
 	{
-		if (!_onTime)
+		if (!_onTime || !_offTime)
 			InsError(*(uint32_t*)"sefr");
 		digitalWrite(_pin, value);
 		_modulating = value == _onState;
@@ -348,6 +347,204 @@ public:
 		return _length - _microsSinceStart;
 	}
 };
+
+#if INS_HAVE_HW_TIMER || UNIT_TEST
+class InterruptWriteScheduler : public SteppedTask
+{
+	friend class InterruptPinWriter;
+
+	struct OutputData
+	{
+		uint16_t micros;
+		uint8_t pin;
+		uint8_t state;
+		uint8_t mode;
+	};
+
+	uint16_t _pollIntervalMicros;
+	uint16_t _futureMicros;
+	uint16_t _currentMicros;
+	uint16_t _currentDelta;
+	bool _didWrite = false;
+	SteppedTask *_task = nullptr;
+	Scheduler::Delegate *_delegate;
+	LockFreeFIFO<OutputData, INS_INPUT_FIFO_LENGTH> _outputFIFO;
+#ifndef UNIT_TEST
+	HWTimer _timer;
+#endif
+	static InterruptWriteScheduler *s_this;
+public:
+	InterruptWriteScheduler(uint16_t pollIntervalMicros, uint16_t futureMicros) :
+		_pollIntervalMicros(pollIntervalMicros), _futureMicros(futureMicros)
+	{
+		s_this = this;
+#ifdef UNIT_TEST
+		attachInterruptInterval(pollIntervalMicros, timerISR);
+#else
+		_timer.attachInterruptInterval(pollIntervalMicros, timerISR);
+#endif
+	}
+
+	bool add(SteppedTask *task, Scheduler::Delegate *delegate = nullptr)
+	{
+		if (_task)
+		{
+			InsError(*(uint32_t*)"txst");
+			return false;
+		}
+		_delegate = delegate;
+		scheduleInternal(task);
+		return true;
+	}
+
+	bool active()
+	{
+		return !!_task;
+	}
+
+	uint16_t SteppedTask_step() override
+	{
+		if (_task)
+			scheduleInternal(_task);
+		return _pollIntervalMicros * (INS_INPUT_FIFO_LENGTH / 2);
+	}
+
+private:
+	void scheduleInternal(SteppedTask *task)
+	{
+		if (!_task)
+		{
+			if (_currentMicros < fastMicros() + _futureMicros)
+				_currentMicros = fastMicros() + _futureMicros;
+			_currentDelta = 0;
+			_task = task;
+		}
+		while (!_outputFIFO.full())
+		{
+			uint16_t delta = task->SteppedTask_step();
+			// The task should have called write now.
+			_currentMicros += _currentDelta;
+			_currentDelta = delta;
+			if (_didWrite)
+			{
+				_didWrite = false;
+			}
+			else
+			{
+				_outputFIFO.writeRef().pin = -1;
+			}
+			_outputFIFO.writeRef().micros = _currentMicros;
+			_outputFIFO.push();
+			if (delta == kInvalidDelta)
+			{
+				SteppedTask *task = _task;
+				_task = nullptr;
+				if (_delegate)
+					_delegate->SchedulerDelegate_done(task);
+				return;
+			}
+			if (delta == kInvalidDelta)
+			{
+				_currentDelta = 0;
+			}
+		}
+	}
+
+	void write(uint8_t pin, uint8_t state, uint8_t mode)
+	{
+		if (!_task)
+		{
+			// This can happen during initialization.
+			if (mode == OUTPUT)
+			{
+				digitalWrite(pin, state);
+				pinMode(pin, mode);
+			}
+			else
+			{
+				pinMode(pin, mode);
+				digitalWrite(pin, state);
+			}
+			return;
+		}
+		_outputFIFO.writeRef().pin = pin;
+		_outputFIFO.writeRef().state = state;
+		_outputFIFO.writeRef().mode = mode;
+		_didWrite = true;
+	}
+
+	void INS_IRAM_ATTR pollOutputISR()
+	{
+		if (_outputFIFO.empty())
+		{
+			return;
+		}
+
+		uint16_t now = fastMicros();
+		uint16_t targetMicros = _outputFIFO.readRef().micros;
+		int16_t timeLeft = targetMicros - now;
+		if (timeLeft > _pollIntervalMicros / 2)
+		{
+			return;
+		}
+
+		uint8_t pin = _outputFIFO.readRef().pin;
+		if (pin == (uint8_t)-1)
+		{
+			_outputFIFO.pop();
+			return;
+		}
+		uint8_t state = _outputFIFO.readRef().state;
+		uint8_t mode = _outputFIFO.readRef().mode;
+		_outputFIFO.pop();
+		if (mode == OUTPUT)
+		{
+			digitalWrite(pin, state);
+			pinMode(pin, mode);
+		}
+		else
+		{
+			pinMode(pin, mode);
+			digitalWrite(pin, state);
+		}
+	}
+
+	static void INS_IRAM_ATTR timerISR()
+	{
+		s_this->pollOutputISR();
+	}
+};
+
+// offMode == OUTPUT -> push-pull.
+// offMode != OUTPUT -> pseudo open drain.
+// When offMode == OUTPUT onState is ignored.
+// IMPORTANT: Encoders using this pin writer must be added to the InterruptWriteScheduler not the normal Scheduler!
+class InterruptPinWriter : public PinWriter
+{
+	InterruptWriteScheduler *_scheduler;
+	uint8_t _pin;
+	uint8_t _onState;
+	uint8_t _offMode;
+public:
+	InterruptPinWriter(InterruptWriteScheduler *scheduler, uint8_t pin, uint8_t onState = HIGH, uint8_t offMode = OUTPUT) :
+		_scheduler(scheduler), _pin(pin), _onState(onState), _offMode(offMode)
+	{
+		pinMode(pin, _offMode);
+		if (offMode != OUTPUT)
+			digitalWrite(pin, onState);
+	}
+
+	void write(uint8_t value) override
+	{
+		if (_offMode == OUTPUT || value == _onState)
+		{
+			_scheduler->write(_pin, value, OUTPUT);
+			return;
+		}
+		_scheduler->write(_pin, _onState, _offMode);
+	}
+};
+#endif
 
 // Input filter and timekeeper
 class InputFilter

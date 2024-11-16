@@ -31,8 +31,10 @@ static const uint8_t D_7  = 7;
 #define DEBUG_FULL_TIMING 0
 #define DEBUG_CYCLE_TIMING 1
 #define DEBUG_DRY_TIMING 0
+#define ENABLE_READ_INTERRUPTS 0
+#define ENABLE_WRITE_INTERRUPTS 0
 
-#if AVR
+#if defined(AVR)
 #define DUAL_UARTS 0 // Also enables more debug output.
 const uint32_t baudRate = 2400;
 #else
@@ -57,7 +59,14 @@ CycleChecker cCheck;
 #endif
 
 Timekeeper timekeeper;
+#if ENABLE_READ_INTERRUPTS
+InterruptScheduler scheduler;
+#else
 Scheduler scheduler;
+#endif
+#if ENABLE_WRITE_INTERRUPTS
+InterruptWriteScheduler writeScheduler(20, 10000);
+#endif
 
 void InsError(uint32_t error)
 {
@@ -75,7 +84,11 @@ class FullDuplexUART  : public Scheduler::Delegate, public RxUART::Delegate
 {
   Timekeeper _timekeeper;
   uint8_t _pin;
+#if ENABLE_WRITE_INTERRUPTS
+  InterruptPinWriter _pinWriter;
+#else
   PushPullPinWriter _pinWriter;
+#endif
   TxUART _tx;
   RxUART _rx;
   uint8_t _sendData;
@@ -83,7 +96,11 @@ class FullDuplexUART  : public Scheduler::Delegate, public RxUART::Delegate
 public:
   FullDuplexUART(uint8_t pin) :
     _pin(pin),
+#if ENABLE_WRITE_INTERRUPTS
+    _pinWriter(&writeScheduler, pin, LOW, HIGH),
+#else
     _pinWriter(pin),
+#endif
     _tx(&_pinWriter, HIGH),
     _rx(HIGH, this)
   {
@@ -158,6 +175,9 @@ void setup()
 
   scheduler.begin();
   scheduler.add(&printer);
+#if ENABLE_WRITE_INTERRUPTS
+  scheduler.add(&writeScheduler);
+#endif
 
 #ifdef INS_SAMPLE_DEBUG_PIN
   pinMode(INS_SAMPLE_DEBUG_PIN, OUTPUT);

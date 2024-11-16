@@ -1,6 +1,7 @@
 // Copyright (c) 2024 Daniel Wallner
 
 #include "Inseparates.h"
+#include "ProtocolUtils.h"
 
 namespace inseparates
 {
@@ -41,6 +42,11 @@ void Scheduler::runFor(SteppedTask *task, unsigned steps)
 		}
 	}
 }
+#endif
+
+#if INS_HAVE_HW_TIMER || UNIT_TEST
+InterruptScheduler *InterruptScheduler::s_this;
+InterruptWriteScheduler *InterruptWriteScheduler::s_this;
 #endif
 
 }

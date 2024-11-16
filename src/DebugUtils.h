@@ -127,14 +127,14 @@ public:
 
 	uint16_t SteppedTask_step() override
 	{
-#if AVR
+#ifdef AVR
 		if (!(UCSR0A & (1 << UDRE0)))
 			return 20;
 #endif
 		if (_pos < kBufferLength && _string[_pos])
 		{
 			char c = _string[_pos];
-#if AVR
+#ifdef AVR
 			UDR0 = c;
 #else
 #ifndef UNIT_TEST
