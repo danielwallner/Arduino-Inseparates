@@ -45,16 +45,21 @@ public:
 		_pin(pin), _onState(onState), _offMode(offMode)
 	{
 		pinMode(pin, _offMode);
-		digitalWrite(pin, onState);
+		digitalWrite(pin, onState ? 0 : 1);
 	}
 
 	void write(uint8_t value) override
 	{
-		digitalWrite(_pin, _onState);
 		if (value == _onState)
+		{
+			digitalWrite(_pin, _onState);
 			pinMode(_pin, OUTPUT);
+		}
 		else
+		{
+			digitalWrite(_pin, _onState ? 0 : 1);
 			pinMode(_pin, _offMode);
+		}
 	}
 };
 
