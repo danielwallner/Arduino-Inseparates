@@ -63,6 +63,12 @@ add_executable(debug_uart
 	DebugUART.cpp
 )
 
+add_executable(debug_system
+	${COMMON_SOURCES}
+
+	DebugSystem.cpp
+)
+
 add_executable(test_all
 	${COMMON_SOURCES}
 
