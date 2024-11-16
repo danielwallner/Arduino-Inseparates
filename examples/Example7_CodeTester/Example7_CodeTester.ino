@@ -2,7 +2,7 @@
 
 // Sends messages when space bar is presssed.
 // Modify address and command with W A S D or 8 4 5 6 keys.
-// Works best with a standalone serial monitor where you don't have to press enter to trigger send.
+// Works best with a serial monitor where you don't have to press enter to trigger send.
 
 // Many devices support more commands than those available on the remote.
 // Set the address to a known good value and test different commands with this sketch.
@@ -19,11 +19,15 @@
 #include <ProtocolRC5.h>
 #include <ProtocolNEC.h>
 
-#if !defined(D3) && defined(PD3)
-#define D3 PD3
+#if defined(ESP8266) // WEMOS D1 R2
+static const uint8_t D_3  = 5;
+#elif defined(ESP32) // WEMOS D1 R32
+static const uint8_t D_3  = 25;
+#else
+static const uint8_t D_3  = 3;
 #endif
 
-const uint16_t kIRSendPin = D3;
+const uint16_t kIRSendPin = D_3;
 
 using namespace inseparates;
 
