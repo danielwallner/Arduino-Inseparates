@@ -53,8 +53,8 @@ static const uint8_t D_10 = 10;
 #endif
 
 const uint8_t kBeo36RecvPin = D_2;
-const uint8_t kDatalink80RecvPin = D_8;
-const uint8_t kDatalink86RecvPin = D_10;
+const uint8_t kDatalink80RecvPin = D_9;
+const uint8_t kDatalink86RecvPin = D_6;
 const uint8_t kESIRecvPin = D_10;
 const uint8_t kNECRecvPin = D_2;
 const uint8_t kRC5RecvPin = D_8;
@@ -169,7 +169,7 @@ RxDatalink80 datalink80Decoder(LOW, &delegate);
 RxDatalink86 datalink86Decoder(LOW, &delegate);
 RxESI esiDecoder(HIGH, &delegate);
 RxNEC necDecoder(LOW, &delegate);
-RxRC5 rc5Decoder(LOW, &delegate);
+RxRC5 rc5Decoder(HIGH, &delegate);
 RxSIRC sircDecoder(LOW, &delegate);
 RxTechnicsSC technicsDecoder(kTechnicsSCDataPin, kTechnicsSCClockPin, LOW, &delegate);
 
@@ -201,9 +201,7 @@ void setup()
   Serial.flush();
 
   scheduler.begin();
-#if DEBUG_FULL_TIMING || DEBUG_CYCLE_TIMING
   scheduler.add(&printer);
-#endif
 
 #if !AVR
   // AVR cannot reliably handle all protocols at the same time.
