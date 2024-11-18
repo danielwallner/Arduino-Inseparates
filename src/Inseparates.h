@@ -425,9 +425,10 @@ private:
 			now = fastMicros();
 			if (delta == SteppedTask::kInvalidDelta)
 			{
-				if (_tasks_delegate[i])
-					_tasks_delegate[i]->SchedulerDelegate_done(_tasks_task[i]);
+				SteppedTask *task = _tasks_task[i];
 				_tasks_task[i] = nullptr;
+				if (_tasks_delegate[i])
+					_tasks_delegate[i]->SchedulerDelegate_done(task);
 				continue;
 			}
 		}
