@@ -1,0 +1,153 @@
+#ifndef _EXTRAS_BUTTONS_H_
+#define _EXTRAS_BUTTONS_H_
+
+enum button_type_t: uint8_t {
+    NO_BUTTON = 0,
+    SYSTEM_POWER_TOGGLE,
+    SLEEP,
+
+    TIMER_SNOOZE,
+
+    VOLUME_UP,
+    VOLUME_DOWN,
+    VOLUME_BALANCE_LEFT,
+    VOLUME_BALANCE_RIGHT,
+    VOLUME_MUTE,
+
+    SOURCE_NEXT,
+    SOURCE_PHONO,
+    SOURCE_CD,
+    SOURCE_TUNER,
+    SOURCE_AUX,
+    SOURCE_TAPE_MON,
+    SOURCE_TAPE1,
+    SOURCE_TAPE2,
+    SOURCE_TV,
+    SOURCE_DVD,
+    SOURCE_VCR,
+
+    SYSTEM_0,
+    SYSTEM_UP,
+    SYSTEM_DOWN,
+    SYSTEM_LEFT,
+    SYSTEM_RIGHT,
+    SYSTEM_ENTER,
+    SYSTEM_FFWD,
+    SYSTEM_REW,
+    SYSTEM_NEXT,
+    SYSTEM_PREV,
+    SYSTEM_PLAY,
+    SYSTEM_PAUSE,
+    SYSTEM_STOP,
+
+    EQ_ON_FLAT,
+    EQ_NEXT_PRESET,
+ 
+    PHONO_POWER,
+    PHONO_START,
+    PHONO_START_STOP,
+    PHONO_STOP,
+    PHONO_CUE,
+
+    CD_POWER,
+    CD_1,
+    CD_2,
+    CD_3,
+    CD_4,
+    CD_5,
+    CD_6,
+    CD_7,
+    CD_8,
+    CD_9,
+    CD_0,
+    CD_FFWD,
+    CD_REW,
+    CD_NEXT,
+    CD_PREV,
+    CD_PLAY,
+    CD_PAUSE,
+    CD_PLAY_PAUSE,
+    CD_STOP,
+    CD_PAUSE_STOP,
+    CD_RANDOM,
+    CD_REPEAT,
+    CD_PGM,
+    CD_CLEAR,
+    CD_PREV_DISC,
+    CD_NEXT_DISC,
+    CD_OPEN_CLOSE,
+
+    MD_PLAY,
+    MD_STOP,
+
+    TUNER_POWER,
+    TUNER_1,
+    TUNER_2,
+    TUNER_3,
+    TUNER_4,
+    TUNER_5,
+    TUNER_6,
+    TUNER_7,
+    TUNER_8,
+    TUNER_9,
+    TUNER_0,
+    TUNER_BAND,
+    TUNER_FREQ_UP,
+    TUNER_FREQ_DOWN,
+    TUNER_PRESET_UP,
+    TUNER_PRESET_DOWN,
+    TUNER_TUNING_PRESET,
+    TUNER_PRESET_SHIFT,
+    TUNER_PRESET_SHIFT_A,
+    TUNER_PRESET_SHIFT_B,
+    TUNER_PRESET_SHIFT_C,
+    TUNER_MEMORY,
+    TUNER_MEMORY_SCAN,
+    TUNER_HITS,
+    TUNER_DISPLAY_MODE,
+    TUNER_TUNING_MODE,
+    TUNER_FM_MODE,
+    TUNER_MUTING,
+
+    TAPE_POWER,
+    TAPE_DIR_A,
+    TAPE_DIR_B,
+    TAPE_FFWD_A,
+    TAPE_FFWD_B,
+    TAPE_REW_A,
+    TAPE_REW_B,
+    TAPE_REV_A,
+    TAPE_REV_B,
+    TAPE_PLAY_A,
+    TAPE_PLAY_B,
+    TAPE_PAUSE_A,
+    TAPE_PAUSE_B,
+    TAPE_STOP_A,
+    TAPE_STOP_B,
+    TAPE_REC_PAUSE_A,
+    TAPE_REC_PAUSE_B,
+    TAPE_REC_MUTE_A,
+    TAPE_REC_MUTE_B,
+    TAPE_OPEN_A,
+    TAPE_OPEN_B,
+    TAPE_DECK_A,
+    TAPE_DECK_B,
+    TAPE_DECK_A_B,
+};
+
+struct button_state
+{
+    button_type_t button;
+    uint8_t flags;
+    unsigned long received_at;
+};
+
+#define IS_SYSTEM_BUTTON(b) (b < EQ_ON_FLAT)
+#define IS_PHONO_BUTTON(b) (b >= PHONO_POWER && b < CD_POWER)
+#define IS_CD_BUTTON(b) (b >= CD_POWER && b < TUNER_POWER)
+#define IS_TUNER_BUTTON(b) (b >= TUNER_POWER && b < TAPE_POWER)
+#define IS_TAPE_BUTTON(b) (b >= TAPE_POWER && b <= TAPE_DECK_A_B)
+
+#define INS_FLAG_REPEAT 0x01
+
+#endif
