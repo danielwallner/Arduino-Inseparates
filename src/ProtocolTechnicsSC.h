@@ -17,7 +17,7 @@
 // As part of the handshake in the beginning of the transmission all masters must stop driving data to 0V.
 
 // For reference, these are the raw Kaseikyo IR codes and the translated System Control output from a RAK-SC304W remote controlling a ST-X902L.
-// IR repeat rate is about 130 ms. System control repeat rate is abount 50 ms.
+// IR repeat rate is about 130 ms. System control repeat rate is about 50 ms.
 // The remote repeats all commands indefinitely but some of the forwarded commands are only repeated four times.
 // OFF/ON                 0x993D04A0  Not forwarded.
 // SLEEP                  0x329604A0  Not forwarded.
@@ -67,6 +67,13 @@ namespace inseparates
 // The simple handshake implemented here may not work under severe load.
 class TxTechnicsSC : public SteppedTask
 {
+public:
+	class Delegate
+	{
+	public:
+		virtual void TxTechnicsSCDelegate_done() = 0;
+	};
+
 	friend class RxTechnicsSC;
 	static const uint8_t kIdleState = -2;
 	static const uint8_t kPreparedState = -1;
@@ -79,11 +86,12 @@ class TxTechnicsSC : public SteppedTask
 	uint8_t _clockInputPin;
 	uint8_t _mark;
 	bool _current;
+	Delegate *_delegate;
 	uint8_t _count;
 	uint16_t _lastClock;
 public:
-	TxTechnicsSC(PinWriter *dataPin, PinWriter *clockPin, uint8_t dataInputPin, uint8_t clockInputPin, uint8_t mark) :
-		_dataPin(dataPin), _clockPin(clockPin), _dataInputPin(dataInputPin), _clockInputPin(clockInputPin), _mark(mark), _count(kIdleState)
+	TxTechnicsSC(PinWriter *dataPin, PinWriter *clockPin, uint8_t dataInputPin, uint8_t clockInputPin, uint8_t mark, Delegate *delegate = nullptr) :
+		_dataPin(dataPin), _clockPin(clockPin), _dataInputPin(dataInputPin), _clockInputPin(clockInputPin), _mark(mark), _delegate(delegate), _count(kIdleState)
 	{
 		_clockPin->write(1 ^ _mark);
 		_dataPin->write(_mark);
@@ -161,6 +169,8 @@ public:
 			if (_current)
 			_dataPin->write(_mark);
 			_count = kIdleState;
+			if (_delegate)
+				_delegate->TxTechnicsSCDelegate_done();
 			// Normally SteppedTask::kInvalidDelta should be returned here but this instance must be kept active for handshake with other masters.
 			return kQuarterStepMicros;
 		}
