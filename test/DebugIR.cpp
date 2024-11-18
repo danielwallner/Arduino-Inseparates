@@ -111,8 +111,9 @@ int main()
 			std::vector<uint8_t> receivedData;
 			uint32_t dataDelay = 0;
 
-			void RxDatalink80Delegate_data(uint8_t data) override
+			void RxDatalink80Delegate_data(uint8_t data, uint8_t bus) override
 			{
+				assert(bus == 0);
 				receivedData.push_back(data);
 				dataDelay = totalDelay();
 			}
@@ -205,8 +206,9 @@ int main()
 			uint64_t receivedBits = 0;
 			uint32_t dataDelay = 0;
 
-			void RxDatalink86Delegate_data(uint64_t data, uint8_t bits) override
+			void RxDatalink86Delegate_data(uint64_t data, uint8_t bits, uint8_t bus) override
 			{
+				assert(bus == 0);
 				receivedData = data;
 				receivedBits = bits;
 				dataDelay = totalDelay();

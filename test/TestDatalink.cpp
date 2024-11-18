@@ -62,8 +62,9 @@ TEST(RxTest, Datalink80)
 	public:
 		Delegate(uint8_t &receivedData_) : receivedData(receivedData_) {}
 
-		void RxDatalink80Delegate_data(uint8_t data) override
+		void RxDatalink80Delegate_data(uint8_t data, uint8_t bus) override
 		{
+			assert(bus == 1);
 			receivedData = data;
 		}
 
@@ -77,7 +78,7 @@ TEST(RxTest, Datalink80)
 
 	Delegate delegate(receivedData);
 
-	RxDatalink80 datalinkDecoder(LOW, &delegate);
+	RxDatalink80 datalinkDecoder(LOW, &delegate, 1);
 
 	uint16_t startDelay = 4321;
 	uint32_t data = 0x41;
@@ -185,8 +186,9 @@ TEST(RxTest, Datalink86)
 	public:
 		Delegate(uint64_t &receivedData_, uint8_t &receivedBits_) : receivedData(receivedData_), receivedBits(receivedBits_) {}
 
-		void RxDatalink86Delegate_data(uint64_t data, uint8_t bits) override
+		void RxDatalink86Delegate_data(uint64_t data, uint8_t bits, uint8_t bus) override
 		{
+			assert(bus == 1);
 			receivedData = data;
 			receivedBits = bits;
 		}
@@ -198,7 +200,7 @@ TEST(RxTest, Datalink86)
 
 	Delegate delegate(receivedData, receivedBits);
 
-	RxDatalink86 datalinkDecoder(HIGH, &delegate);
+	RxDatalink86 datalinkDecoder(HIGH, &delegate, 1);
 
 	uint16_t startDelay = 4321;
 	uint32_t data = 0x8000001;

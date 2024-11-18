@@ -108,7 +108,7 @@ public:
     printer.println(String(data, HEX));
   }
 
-  void RxDatalink80Delegate_data(uint8_t data) override
+  void RxDatalink80Delegate_data(uint8_t data, uint8_t bus) override
   {
     printer.print("Datalink80: ");
     printer.print(String(0x7F & ~data, BIN));
@@ -121,7 +121,7 @@ public:
     printer.println("Datalink80 timing error");
   }
 
-  void RxDatalink86Delegate_data(uint64_t data, uint8_t bits) override
+  void RxDatalink86Delegate_data(uint64_t data, uint8_t bits, uint8_t bus) override
   {
     printer.print("Datalink86: ");
     printer.print(String(uint32_t(data >> 32), HEX));

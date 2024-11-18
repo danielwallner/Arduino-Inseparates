@@ -125,7 +125,7 @@ public:
 	class Delegate
 	{
 	public:
-		virtual void RxDatalink86Delegate_data(uint64_t data, uint8_t bits) = 0;
+		virtual void RxDatalink86Delegate_data(uint64_t data, uint8_t bits, uint8_t bus) = 0;
 	};
 
 private:
@@ -134,11 +134,12 @@ private:
 	Delegate *_delegate;
 	uint8_t _lastBit;
 	uint64_t _data;
+	uint8_t _bus;
 	uint8_t _count;
 
 public:
-	RxDatalink86(uint8_t mark, Delegate *delegate) :
-		_mark(mark), _delegate(delegate)
+	RxDatalink86(uint8_t mark, Delegate *delegate, uint8_t bus = 0) :
+		_mark(mark), _delegate(delegate), _bus(bus)
 	{
 		reset();
 	}
@@ -217,7 +218,7 @@ public:
 			// If this is the start of a repeat message the first mark for the next message will be swallowed.
 			// This will anyway be accepted as a new message.
 			if (_delegate)
-				_delegate->RxDatalink86Delegate_data(_data, _count - 5);
+				_delegate->RxDatalink86Delegate_data(_data, _count - 5, _bus);
 			goto distance_error;
 		}
 

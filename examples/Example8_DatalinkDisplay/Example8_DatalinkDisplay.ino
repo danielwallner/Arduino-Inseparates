@@ -74,7 +74,7 @@ void InsError(uint32_t error)
 class Delegate : public RxDatalink86::Delegate
 {
 public:
-  void RxDatalink86Delegate_data(uint64_t data, uint8_t bits) override
+  void RxDatalink86Delegate_data(uint64_t data, uint8_t bits, uint8_t bus) override
   {
     printer.print("Datalink86: ");
     printer.print(String(uint32_t(data >> 32), HEX));

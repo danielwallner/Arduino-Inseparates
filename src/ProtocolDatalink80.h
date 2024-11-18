@@ -106,7 +106,7 @@ public:
 	class Delegate
 	{
 	public:
-		virtual void RxDatalink80Delegate_data(uint8_t data) = 0;
+		virtual void RxDatalink80Delegate_data(uint8_t data, uint8_t bus) = 0;
 		virtual void RxDatalink80Delegate_timingError() = 0;
 	};
 
@@ -115,12 +115,13 @@ private:
 	uint8_t _data;
 	uint8_t _mark;
 	Delegate *_delegate;
+	uint8_t _bus;
 	uint8_t _count;
 public:
 	// The main receive function is driven by input changes.
 	// You need to run SteppedTask_step() to get the last byte from a stream of bytes!
-	RxDatalink80(uint8_t mark, Delegate *delegate) :
-		_mark(mark), _delegate(delegate)
+	RxDatalink80(uint8_t mark, Delegate *delegate, uint8_t bus = 0) :
+		_mark(mark), _delegate(delegate), _bus(bus)
 	{
 		reset();
 	}
@@ -157,7 +158,7 @@ public:
 			}
 			if (_delegate)
 			{
-				_delegate->RxDatalink80Delegate_data(_data);
+				_delegate->RxDatalink80Delegate_data(_data, _bus);
 			}
 			reset();
 			return;
@@ -238,7 +239,7 @@ public:
 			}
 			else if (_delegate)
 			{
-				_delegate->RxDatalink80Delegate_data(_data);
+				_delegate->RxDatalink80Delegate_data(_data, _bus);
 			}
 			_count = -1;
 			return Decoder::kInvalidTimeout;
