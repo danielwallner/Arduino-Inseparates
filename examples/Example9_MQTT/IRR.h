@@ -151,6 +151,10 @@ void loopIR()
   {
     if (irrecv.decode(&results))
     {
+      if (results.decode_type <= 0)
+      {
+        irrecv.resume();
+      }
       String protocol_name = typeToString(results.decode_type);
       Message message;
       message.value = results.value;
