@@ -168,7 +168,7 @@ Contributions are welcome.
 
 This project is licensed under the MIT License. See the [LICENSE](./LICENSE) file for details.
 
-##Disclaimer
+## Disclaimer
 This project is an independent effort and is not affiliated with, endorsed by, or associated with any of the trademarks, brands, or companies mentioned in the documentation or source code. All product names, logos and brands are properties of their respective owners. Use of these names, trademarks, and brands is for informational and descriptive purposes only and does not imply any association, endorsement, or partnership.
 
 ### Additional Documentation Links
