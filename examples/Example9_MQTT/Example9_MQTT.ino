@@ -13,7 +13,8 @@
 // inseparates/commands/IRtoMQTT -- Received messages
 // inseparates/commands/MQTTtoIR -- Send message
 
-// Also accepts json messages on the serial port
+// MQTT messages can be multiple JSON lines or just concatenated JSON
+// Also accepts regular JSON on the serial port
 
 // Extensions compared to IRremoteESP8266
 // bus - integer - when absent or zero send IR
@@ -55,9 +56,14 @@
 
 #define RESET_SETTINGS 0 // Don't keep this when configuring or settings will be reset again.
 #define ECHO 0
+#define INS_DEBUGGING 0
 #if defined(ESP32)
 #define REV_A 1
+#else
+#define REV_A 0
 #endif
+
+#define ENABLE_IRREMOTE 1
 
 #define SERIAL_BUFFER_SIZE 256
 
@@ -251,7 +257,8 @@ void publish(Message &message)
 
   doc["value"] = message.value;
   doc["hex"] = hexStr;
-  doc["protocol_name"] = message.protocol_name;
+  if (message.protocol_name)
+    doc["protocol_name"] = message.protocol_name;
   doc["protocol"] = message.protocol;
   if (message.repeat)
     doc["repeat"] = message.repeat;

@@ -2,6 +2,9 @@
 
 // Implements the IR protocols except for B&O 455 kHz decoding
 
+#define IR_QUEUE_LENGTH 128
+#define FILTER_UNKNOWN_IR 0
+
 #define DECODE_NEC 1
 #define SEND_NEC 1
 #define DECODE_RC5 1
@@ -57,17 +60,11 @@ const uint16_t kIRReceivePin = D_3;
 const uint16_t kIRSendPin = D_9;
 #endif
 
-#include <IRremoteESP8266.h>
-#include <IRrecv.h>
-#include <IRutils.h>
-#include <IRsend.h>
+#include <Inseparates.h>
 
 #include <FastTime.h>
 
 #include <map>
-
-IRrecv irrecv(kIRReceivePin);
-IRsend irsend(kIRSendPin, true);
 
 struct Message
 {
@@ -79,8 +76,52 @@ struct Message
   uint8_t bus;
 };
 
+#if ENABLE_IRREMOTE
+#include <IRremoteESP8266.h>
+#include <IRrecv.h>
+#include <IRutils.h>
+#include <IRsend.h>
+
+IRrecv irrecv(kIRReceivePin);
+IRsend irsend(kIRSendPin, true);
+decode_results results;
+inseparates::LockFreeFIFO<Message, 128> irFIFO;
+#endif
+
 void sendInseparates(Message &message);
 void publish(Message &message);
+
+#if !ENABLE_IRREMOTE
+enum decode_type_t
+{
+  UNKNOWN = -1,
+  UNUSED = 0,
+  RC5,
+  NEC = 3,
+  SONY,
+};
+String typeToString(const decode_type_t protocol, const bool isRepeat = false)
+{
+  switch (protocol)
+  {
+  case RC5:
+    return "RC5";
+  case NEC:
+    return "NEC";
+  case SONY:
+    return "SONY";
+  }
+  return "UNKNOWN";
+}
+
+decode_type_t strToDecodeType(const char *name)
+{
+  if (!strcmp(name, "RC5")) return RC5;
+  else if (!strcmp(name, "NEC")) return NEC;
+  else if (!strcmp(name, "SONY")) return SONY;
+  return UNKNOWN;
+}
+#endif
 
 void received(Message &message)
 {
@@ -121,9 +162,13 @@ void dispatch(Message &message)
   }
   else
   {
-    bool result = irsend.send((decode_type_t)message.protocol, message.value, message.bits, message.repeat);
-    if (!result)
-      logLine("UNHANDLED IR");
+#if ENABLE_IRREMOTE
+    message.protocol_name = nullptr;
+    irFIFO.writeRef() = message;
+    irFIFO.push();
+#else
+    logLine("UNHANDLED IR");
+#endif
   }
 }
 
@@ -131,6 +176,7 @@ inseparates::Timekeeper16 irTimekeeper;
 
 void setupIR()
 {
+#if ENABLE_IRREMOTE
   irrecv.enableIRIn();
   irTimekeeper.reset();
 
@@ -141,20 +187,32 @@ void setupIR()
 
   Serial.print("IR transmitter active on pin ");
   Serial.println(kIRSendPin);
+#endif
 }
-
-decode_results results;
 
 void loopIR()
 {
+#if ENABLE_IRREMOTE
+  if (!irFIFO.empty())
+  {
+    const Message &message = irFIFO.readRef();
+    bool result = irsend.send((decode_type_t)message.protocol, message.value, message.bits, message.repeat);
+    irFIFO.pop();
+    if (!result)
+      logLine("UNHANDLED IR");
+  }
+
   if (irTimekeeper.microsSinceReset() > 1000)
   {
     if (irrecv.decode(&results))
     {
+#if FILTER_UNKNOWN_IR
       if (results.decode_type <= 0)
       {
         irrecv.resume();
+        return;
       }
+#endif
       String protocol_name = typeToString(results.decode_type);
       Message message;
       message.value = results.value;
@@ -169,4 +227,5 @@ void loopIR()
       received(message);
     }
   }
+#endif
 }
