@@ -268,29 +268,25 @@ void publish(Message &message)
 
 void callback(char* topic, byte* payload, unsigned int length)
 {
-#if ECHO
-  String logString = topic;
-  logString += ": ";
-#endif
-
   char terminatedPayload[length + 1];
-  for (int i = 0; i < length; i++)
+  unsigned writePos = 0;
+  for (unsigned i = 0; i < length; ++i)
   {
-    terminatedPayload[i] = payload[i];
+    terminatedPayload[writePos] = payload[i];
+    ++writePos;
+    if (payload[i] == '}')
+    {
+      terminatedPayload[writePos] = 0;
+      handleJSON(terminatedPayload);
 #if ECHO
-    logString += (char)payload[i];
+      logLine(terminatedPayload);
 #endif
+      writePos = 0;
+    }
   }
-  terminatedPayload[length] = 0;
-
-#if ECHO
-  logLine(logString);
-#endif
-
-  handleJSON(terminatedPayload);
 }
 
-void handleJSON(char* string)
+void handleJSON(const char* string)
 {
   Message message;
   message.value = 0;
