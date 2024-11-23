@@ -3,6 +3,8 @@
 #ifndef _INS_PLATFORM_TIMERS_H_
 #define _INS_PLATFORM_TIMERS_H_
 
+// HWTimer only support one instance at a time!
+
 #ifdef ARDUINO_ARCH_SAMD
 #include <SAMDTimerInterrupt.hpp>
 #endif
@@ -78,11 +80,16 @@ public:
 class HWTimer
 {
 	SAMDTimerInterrupt _timer;
+
 public:
-	HWTimer() : _timer(TIMER_TC3) {}
+	HWTimer() :
+		_timer(TIMER_TC3)
+	{
+	}
+
 	void attachInterruptInterval(const unsigned long &interval, void (*callback)(void))
 	{
-		attachInterruptInterval(interval, callback);
+		_timer.attachInterruptInterval_MS(interval * 0.001f, callback);
 	}
 };
 #endif

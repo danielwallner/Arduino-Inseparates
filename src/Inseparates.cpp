@@ -3,6 +3,10 @@
 #include "Inseparates.h"
 #include "ProtocolUtils.h"
 
+#ifdef ARDUINO_ARCH_SAMD
+#include <SAMDTimerInterrupt.h>
+#endif
+
 namespace inseparates
 {
 
