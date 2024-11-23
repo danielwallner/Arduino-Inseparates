@@ -231,7 +231,7 @@ void logLine(const String &string)
 void hex64(String &hexStr, uint64_t value)
 {
   hexStr = "0x";
-  for (int i = 60; i >= 0; i -= 4)
+  for (int8_t i = 60; i >= 0; i -= 4)
   {
     uint8_t nibble = (value >> i) & 0xF;
     if (!(hexStr.length() == 2 && nibble == 0))

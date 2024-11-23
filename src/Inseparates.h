@@ -126,7 +126,7 @@ public:
 	// Add and step task.
 	bool add(SteppedTask *task, Delegate *delegate = nullptr)
 	{
-		for (int i = 0; i < INS_SEQUENCER_MAX_NUM_TASKS; ++i)
+		for (uint8_t i = 0; i < INS_SEQUENCER_MAX_NUM_TASKS; ++i)
 		{
 			if (_tasks_task[i])
 				continue;
@@ -145,7 +145,7 @@ public:
 	// Add task after microseconds.
 	bool addDelayed(SteppedTask *task, uint16_t delayUS, Delegate *delegate = nullptr)
 	{
-		for (int i = 0; i < INS_SEQUENCER_MAX_NUM_TASKS; ++i)
+		for (uint8_t i = 0; i < INS_SEQUENCER_MAX_NUM_TASKS; ++i)
 		{
 			if (_tasks_task[i])
 				continue;
@@ -165,7 +165,7 @@ public:
 	bool remove(SteppedTask *task)
 	{
 		bool found = false;
-		for (int i = 0; i < _maxTask; ++i)
+		for (uint8_t i = 0; i < _maxTask; ++i)
 		{
 			if (_tasks_task[i] != task)
 				continue;
@@ -178,7 +178,7 @@ public:
 			InsError(*(uint32_t*)"nstk");
 			return false;
 		}
-		for (int i = _maxTask; i; --i)
+		for (uint8_t i = _maxTask; i; --i)
 		{
 			if (_tasks_task[i - 1])
 				return true;
@@ -190,7 +190,7 @@ public:
 	// Check if task is active.
 	bool active(SteppedTask *task)
 	{
-		for (int i = 0; i < _maxTask; ++i)
+		for (uint8_t i = 0; i < _maxTask; ++i)
 		{
 			if (_tasks_task[i] != task)
 				continue;
