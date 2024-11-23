@@ -21,7 +21,15 @@
 #		include <assert.h>
 #		define INS_ASSERT(c) (assert(c))
 #	else
-#		define INS_ASSERT(c) do{if(!(c)){Serial.println("INS_ASSERT("#c") failed!");InsError(*(uint32_t*)"asrt");}}while(0)
+#		define INS_ASSERT(c) do { \
+			if (!(c)) { \
+				Serial.print("INS_ASSERT(\"" #c "\") failed! "); \
+				Serial.print("File: "); \
+				Serial.print(__FILE__); \
+				Serial.print(", Line: "); \
+				Serial.println(__LINE__); \
+				InsError(*(uint32_t*)"asrt"); \
+			} } while (0)
 #	endif
 #else
 #	define INS_DEBUGF(...) ((void)0)
