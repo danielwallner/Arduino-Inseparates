@@ -39,11 +39,17 @@ public:
 class HWTimer
 {
 	hw_timer_t *_timer = nullptr;
+
 public:
-	HWTimer()
+	HWTimer() :
+#if ESP_IDF_VERSION_MAJOR < 5
+		_timer(timerBegin(0, 80, true))
+#else
+		_timer(timerBegin(1000000))
+#endif
 	{
-		_timer = timerBegin(1000000);
 	}
+
 	~HWTimer()
 	{
 		if (_timer)
@@ -54,8 +60,14 @@ public:
 
 	void attachInterruptInterval(const unsigned long &interval, void (*callback)(void))
 	{
+#if ESP_IDF_VERSION_MAJOR < 5
+		timerAttachInterrupt(_timer, callback, true);
+		timerAlarmWrite(_timer, interval, true);
+		timerAlarmEnable(_timer);
+#else
 		timerAttachInterrupt(_timer, callback);
 		timerAlarm(_timer, interval, true, 0);
+#endif
 	}
 };
 #endif

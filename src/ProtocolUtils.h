@@ -116,10 +116,12 @@ public:
 		}
 		analogWriteRange(63);
 #elif defined(ESP32)
-		// ESP32 ledcAttach has an upper limit.
-		if (frequency > 300000)
-			InsError(*(uint32_t*)"pfrq");
+#if ESP_IDF_VERSION_MAJOR < 5
+		ledcAttachPin(_pin, 0);
+		ledcSetup(0, _frequency, 6);
+#else
 		ledcAttach(_pin, _frequency, 6);
+#endif
 #endif
 	}
 
@@ -162,6 +164,16 @@ public:
 				analogWrite(_pin, (100 - _dutyCycle) * 63U / 100);
 			}
 #elif defined(ESP32)
+#if ESP_IDF_VERSION_MAJOR < 5
+			if (_onState == HIGH)
+			{
+				ledcWrite(0, _dutyCycle * 63U / 100);
+			}
+			else
+			{
+				ledcWrite(0, (100 - _dutyCycle) * 63U / 100);
+			}
+#else
 			if (_onState == HIGH)
 			{
 				ledcWrite(_pin, _dutyCycle * 63U / 100);
@@ -170,6 +182,7 @@ public:
 			{
 				ledcWrite(_pin, (100 - _dutyCycle) * 63U / 100);
 			}
+#endif
 #else
 			// This fallback may not work as some platforms limit the frequency to 20 kHz.
 			// Also, tone does not support duty cycle.
@@ -183,7 +196,11 @@ public:
 #elif defined(ESP8266)
 			digitalWrite(_pin, 1 ^ _onState);
 #elif defined(ESP32)
-			ledcWrite(_pin, (1 ^ _onState) * 255);
+#if ESP_IDF_VERSION_MAJOR < 5
+			ledcWrite(0, (1 ^ _onState) * 63);
+#else
+			ledcWrite(_pin, (1 ^ _onState) * 63);
+#endif
 #else
 			noTone(_pin);
 			digitalWrite(_pin, 1 ^ _onState);
