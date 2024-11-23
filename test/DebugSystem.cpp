@@ -6,6 +6,10 @@
 #define INS_ENABLE_INPUT_FILTER 1
 #define INS_UART_FRACTIONAL_TIME 1
 
+#define USE_READ_INTERRUPTS true
+
+#define BAUD_RATE 50000
+
 #include "../src/ProtocolUART.h"
 #include "../src/DebugUtils.h"
 
@@ -52,11 +56,11 @@ int main()
     {
         resetLogs();
 
-        InterruptScheduler scheduler;
+        Scheduler scheduler;
 
         uint8_t pin = 4;
         uint8_t bits = 8;
-        uint32_t baudRate = 1200;
+        uint32_t baudRate = BAUD_RATE;
         uint8_t data = 0x2;
 
         class Delegate : public RxUART::Delegate, public Scheduler::Delegate
@@ -114,7 +118,7 @@ int main()
         rxUART.setBaudrate(baudRate);
         rxUART.setFormat(Parity::kOdd, bits);
 
-        scheduler.add(&rxUART, pin);
+        scheduler.add(&rxUART, pin, USE_READ_INTERRUPTS);
 
         for (int i = 0; delegate.receivedData.size() < 2; ++i)
         {
@@ -132,11 +136,11 @@ int main()
     {
         resetLogs();
 
-        InterruptScheduler scheduler;
+        Scheduler scheduler;
 
         uint8_t pin = 4;
         uint8_t bits = 8;
-        uint32_t baudRate = 1200;
+        uint32_t baudRate = BAUD_RATE;
         uint8_t data = 0x2;
 
         class Delegate2 : public RxUART::Delegate, public Scheduler::Delegate
@@ -144,6 +148,7 @@ int main()
             Scheduler &_scheduler;
             uint8_t &_data;
             InterruptWriteScheduler _writeScheduler;
+            uint8_t _pin;
             InterruptPinWriter _pinWriter;
             TxUART _tx1;
         public:
@@ -153,7 +158,8 @@ int main()
             Delegate2(Scheduler &scheduler, uint8_t &data, uint8_t pin, uint8_t bits, uint32_t baudRate) :
                 _scheduler(scheduler),
                 _data(data),
-                _writeScheduler(5, 1000),
+                _writeScheduler(5),
+                _pin(pin),
                 _pinWriter(&_writeScheduler, pin),
                 _tx1(&_pinWriter, HIGH)
             {
@@ -166,7 +172,7 @@ int main()
             void start()
             {
                 _tx1.prepare(_data);
-                _writeScheduler.add(&_tx1, this);
+                _writeScheduler.add(&_tx1, _pin, this);
             }
 
             void RxUARTDelegate_data(uint8_t data) override
@@ -188,7 +194,7 @@ int main()
             void SchedulerDelegate_done(SteppedTask */*task*/) override
             {
                 _tx1.prepare(~_data);
-                _writeScheduler.add(&_tx1, this);
+                _writeScheduler.add(&_tx1, _pin, this);
             }
         };
 
@@ -198,7 +204,7 @@ int main()
         rxUART.setBaudrate(baudRate);
         rxUART.setFormat(Parity::kOdd, bits);
 
-        scheduler.add(&rxUART, pin);
+        scheduler.add(&rxUART, pin, USE_READ_INTERRUPTS);
 
         for (int i = 0; delegate.receivedData.size() < 2; ++i)
         {

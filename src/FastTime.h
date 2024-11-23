@@ -14,6 +14,16 @@
 namespace inseparates
 {
 
+#if AVR
+#define INS_SHORT_MICROS 1
+typedef uint16_t ins_micros_t;
+typedef int16_t ins_smicros_t;
+#else
+#define INS_SHORT_MICROS 0
+typedef uint32_t ins_micros_t;
+typedef int32_t ins_smicros_t;
+#endif
+
 #if INS_FAST_TIME && AVR
 
 #define INS_FAST_COUNT 1
@@ -45,7 +55,7 @@ inline uint16_t fastCount()
 }
 
 // Must must be called more often than kFastCountMaxMicros with some margin!
-inline uint16_t fastMicros()
+inline ins_micros_t fastMicros()
 {
 	static uint16_t micros;
 	static uint16_t oldCnt;
@@ -60,10 +70,7 @@ inline uint16_t fastMicros()
 
 #define setupFastTime() ((void)0)
 
-inline uint16_t fastMicros()
-{
-	return micros();
-}
+#define fastMicros() ((ins_micros_t)micros())
 
 #endif
 
@@ -75,8 +82,8 @@ inline void safeDelayMicros(int32_t microsDelay)
 #ifndef UNIT_TEST
 		if (microsDelay <= 10)
 		{
-			uint16_t start = fastMicros();
-			while(fastMicros() - start < uint16_t(microsDelay));
+			ins_micros_t start = fastMicros();
+			while(fastMicros() - start < ins_micros_t(microsDelay));
 			return;
 		}
 #endif
@@ -99,16 +106,20 @@ class Timekeeper
 	uint32_t _start;
 	uint32_t _micros32;
 public:
-	Timekeeper() : _start(fastMicros()) {}
+	Timekeeper() { reset(); }
 
-	void reset() { _start = _micros32 = 0; }
+	void reset() { _start = _micros32 = fastMicros(); }
 
-	void tick(uint16_t micros)
+	void tick(ins_micros_t micros)
 	{
-		uint16_t diff = micros - uint16_t(_micros32);
+#if INS_SHORT_MICROS
+		ins_micros_t diff = micros - ins_micros_t(_micros32);
 		_micros32 += diff;
+#else
+		_micros32 = micros;
+#endif
 	}
-	uint32_t microsSinceReset(uint16_t micros) { tick(micros); return _micros32 - _start; }
+	uint32_t microsSinceReset(ins_micros_t micros) { tick(micros); return _micros32 - _start; }
 
 	void tick()
 	{
@@ -128,7 +139,7 @@ public:
 
 	uint16_t microsSinceReset(uint16_t micros) { return micros - _start; }
 
-	uint16_t microsSinceReset() { return fastMicros() - _start; }
+	uint16_t microsSinceReset() { return uint16_t(fastMicros()) - _start; }
 };
 
 }

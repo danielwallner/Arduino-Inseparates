@@ -245,7 +245,7 @@ void setup()
 void loop()
 {
   // On AVR fastMicros() has microsecond resolution and micros() resolution is 4 microseconds.
-  uint16_t now = fastMicros();
+  ins_micros_t now = fastMicros();
 
 #if DEBUG_FULL_TIMING
   TimeInserter tInserter(tAcc, now);

@@ -48,9 +48,8 @@ void Scheduler::runFor(SteppedTask *task, unsigned steps)
 }
 #endif
 
-#if INS_HAVE_HW_TIMER || UNIT_TEST
-InterruptScheduler *InterruptScheduler::s_this;
-InterruptWriteScheduler *InterruptWriteScheduler::s_this;
+#if !(UNIT_TEST || USE_FUNCTIONAL_INTERRUPT)
+uint8_t Scheduler::PinStatePusher::s_pinUsage[MAX_PIN_CALLBACKS] = { (uint8_t)-1 };
 #endif
 
 }

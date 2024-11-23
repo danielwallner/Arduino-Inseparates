@@ -37,8 +37,13 @@ static const uint8_t D_7  = 7;
 #define DEBUG_FULL_TIMING 0
 #define DEBUG_CYCLE_TIMING 1
 #define DEBUG_DRY_TIMING 0
-#define ENABLE_READ_INTERRUPTS 0
-#define ENABLE_WRITE_INTERRUPTS 0
+#if AVR || ARDUINO_ARCH_SAMD
+#define ENABLE_READ_INTERRUPTS false // Not working
+#define ENABLE_WRITE_TIMER 0 // Not supported on AVR
+#else
+#define ENABLE_READ_INTERRUPTS true
+#define ENABLE_WRITE_TIMER 1
+#endif
 
 #if defined(AVR)
 #define DUAL_UARTS 0 // Also enables more debug output.
@@ -65,13 +70,9 @@ CycleChecker cCheck;
 #endif
 
 Timekeeper timekeeper;
-#if ENABLE_READ_INTERRUPTS
-InterruptScheduler scheduler;
-#else
 Scheduler scheduler;
-#endif
-#if ENABLE_WRITE_INTERRUPTS
-InterruptWriteScheduler writeScheduler(20, 10000);
+#if ENABLE_WRITE_TIMER
+InterruptWriteScheduler writeScheduler(20);
 #endif
 
 void InsError(uint32_t error)
@@ -90,7 +91,7 @@ class FullDuplexUART  : public Scheduler::Delegate, public RxUART::Delegate
 {
   Timekeeper _timekeeper;
   uint8_t _pin;
-#if ENABLE_WRITE_INTERRUPTS
+#if ENABLE_WRITE_TIMER
   InterruptPinWriter _pinWriter;
 #else
   PushPullPinWriter _pinWriter;
@@ -102,7 +103,7 @@ class FullDuplexUART  : public Scheduler::Delegate, public RxUART::Delegate
 public:
   FullDuplexUART(uint8_t pin) :
     _pin(pin),
-#if ENABLE_WRITE_INTERRUPTS
+#if ENABLE_WRITE_TIMER
     _pinWriter(&writeScheduler, pin, LOW, HIGH),
 #else
     _pinWriter(pin),
@@ -118,7 +119,7 @@ public:
   {
     _sendData = 0;
     _receiveData = 0;
-    scheduler.add(&_rx, _pin);
+    scheduler.add(&_rx, _pin, ENABLE_READ_INTERRUPTS);
     // Trigger start
     SchedulerDelegate_done(nullptr);
   }
@@ -181,7 +182,7 @@ void setup()
 
   scheduler.begin();
   scheduler.add(&printer);
-#if ENABLE_WRITE_INTERRUPTS
+#if ENABLE_WRITE_TIMER
   scheduler.add(&writeScheduler);
 #endif
 
@@ -196,7 +197,7 @@ void setup()
 void loop()
 {
   // On AVR fastMicros() has microsecond resolution and the resolution of micros() is 4 microseconds.
-  uint16_t now = fastMicros();
+  ins_micros_t now = fastMicros();
 
 #if DEBUG_FULL_TIMING
   TimeInserter tInserter(tAcc, now);

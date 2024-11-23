@@ -27,6 +27,7 @@ void digitalWrite(uint8_t pin, uint8_t value);
 
 #define digitalPinToInterrupt(p)  (p)
 
+void attachInterrupt(uint8_t interruptNum, std::function<void(void)> userFunc, int mode);
 void attachInterrupt(uint8_t interruptNum, void (*userFunc)(void), int mode);
 void detachInterrupt(uint8_t interruptNum);
 

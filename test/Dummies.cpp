@@ -6,7 +6,7 @@
 
 struct IntervalInterrupt
 {
-	void (*isr)(void);
+	std::function<void(void)> isr;
 	uint32_t t;
 	uint16_t interval;
 };
@@ -16,7 +16,7 @@ std::map<uint8_t, std::vector<uint8_t>> g_digitalWriteStateLog;
 std::map<uint8_t, std::vector<uint32_t>> g_digitalWriteTimeLog;
 std::map<uint8_t, uint8_t> g_pinStates;
 std::map<uint8_t, uint32_t> g_lastWrite;
-std::map<uint8_t, void (*)(void)> g_pinInterrupts;
+std::map<uint8_t, std::function<void(void)>> g_pinInterrupts;
 std::vector<IntervalInterrupt> g_intervalInterrupts;
 #if 1
 // For wraparound debugging.
@@ -95,6 +95,11 @@ uint32_t totalDelay()
 	if (!g_delayMicrosecondsLog.size())
 		return 0;
 	return g_delayMicrosecondsLog.back() - kStartTime;
+}
+
+void attachInterrupt(uint8_t interruptNum, std::function<void(void)> userFunc, int /*mode*/)
+{
+	g_pinInterrupts[interruptNum] = userFunc;
 }
 
 void attachInterrupt(uint8_t interruptNum, void (*userFunc)(void), int /*mode*/)

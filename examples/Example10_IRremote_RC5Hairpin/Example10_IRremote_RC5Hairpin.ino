@@ -341,7 +341,7 @@ void setup()
 
 void loop()
 {
-  uint16_t now = fastMicros();
+  ins_micros_t now = fastMicros();
 
 #if DEBUG_FULL_TIMING
   TimeInserter tInserter(tAcc, now);

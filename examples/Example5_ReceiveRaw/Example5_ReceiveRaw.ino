@@ -118,7 +118,7 @@ void loop()
   }
 #endif
 
-  uint16_t now = fastMicros();
+  ins_micros_t now = fastMicros();
   printer.SteppedTask_step();
 #if DEBUG_CYCLE_TIMING
   cCheck.tick(now);

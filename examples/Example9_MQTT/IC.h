@@ -2,8 +2,24 @@
 
 // Implements the interconnect protocols and B&O 36/455 kHz IR decoding
 
-#define ENABLE_READ_INTERRUPTS 0
-#define ENABLE_WRITE_INTERRUPTS 0 // Not yet stable enough to use
+#define DEBUG_FULL_TIMING 0
+#define DEBUG_CYCLE_TIMING 0
+
+#if ENABLE_IRREMOTE
+// For some reason, turning this on makes IRremoteESP8266 receive not working.
+// Turning this off lowers reliablitity and blocks reception during IRremoteESP8266 send.
+#define ENABLE_READ_INTERRUPTS false
+#else
+#define ENABLE_READ_INTERRUPTS true
+#endif
+
+#if defined(ESP32) || !ENABLE_IRREMOTE
+#define ENABLE_WRITE_TIMER 1
+#else
+// IRremoteESP8266 use the only available timer on ESP8266.
+// Ideally, this should be shared, as turning it off makes output timing accuracy worse.
+#define ENABLE_WRITE_TIMER 0
+#endif
 
 #if defined(ESP8266) // WEMOS D1 R2
 static const uint8_t D_2  = 16;
@@ -64,14 +80,18 @@ const uint16_t kRC5Pin = D_8;
 const uint16_t kESIPin = D_12;
 #define HAVE_SR 1
 const uint16_t kSRPin = D_7; // NEC/SIRC
+#if !HAVE_ESI
 #define HAVE_DATALINK86 1
 const uint16_t kDatalink86Pin = D_12;
+#endif
 #if !HAVE_RC5
 #define HAVE_DATALINK80 1
 const uint16_t kDatalink80Tape1Pin = D_8;
 const uint16_t kDatalink80Tape2Pin = D_9;
 #endif
 #if !HAVE_TRIGGER
+// Only enable Technics System Control if you really need it as it's always active and takes processing time even when idle.
+// This is also less reliable than the other receivers as it isn't using interrupts and will be blocked by other tasks.
 #define HAVE_TECHNICS_SC 1
 const uint8_t kTechnicsSCDataPin = D_5;
 const uint8_t kTechnicsSCClockPin = D_4;
@@ -92,7 +112,7 @@ const uint16_t kRC5Pin = D_8;
 const uint16_t kESIPin = D_10;
 #define HAVE_SR 0
 const uint16_t kSRPin = D_7; // NEC/SIRC
-#if !HAVE_ESI
+#if !HAVE_SR
 #define HAVE_DATALINK86 1
 const uint16_t kDatalink86Pin = D_7;
 #endif
@@ -110,15 +130,7 @@ const uint8_t kTechnicsSCClockPin = D_6;
 
 using namespace inseparates;
 
-#if ENABLE_READ_INTERRUPTS
-InterruptScheduler scheduler;
-#else
-Scheduler scheduler;
-#endif
-#if ENABLE_WRITE_INTERRUPTS
-InterruptWriteScheduler writeScheduler(30, 10000);
-#endif
-
+DebugPrinter printer;
 #if DEBUG_FULL_TIMING
 TimeAccumulator tAcc;
 #endif
@@ -126,7 +138,13 @@ TimeAccumulator tAcc;
 CycleChecker cCheck;
 #endif
 
-#if ENABLE_WRITE_INTERRUPTS
+Timekeeper timekeeper;
+Scheduler scheduler;
+#if ENABLE_WRITE_TIMER
+InterruptWriteScheduler writeScheduler(30);
+#endif
+
+#if ENABLE_WRITE_TIMER
 #define SCHEDULER_PARAM &writeScheduler,
 #else
 #define InterruptPinWriter OpenDrainPinWriter
@@ -272,7 +290,7 @@ public:
 #endif
 #if HAVE_TECHNICS_SC
     ,_rxTechnics(kTechnicsSCDataPin, kTechnicsSCClockPin, LOW, this),
-    _txTechnics(&technicsDataPinWriter, &technicsClockPinWriter, kTechnicsSCDataPin, kTechnicsSCClockPin, LOW)
+    _txTechnics(&technicsDataPinWriter, &technicsClockPinWriter, kTechnicsSCDataPin, kTechnicsSCClockPin, LOW, this)
 #endif
   {
   }
@@ -280,30 +298,32 @@ public:
   void begin()
   {
 #if HAVE_RC5
-    scheduler.add(&_rxRC5, kRC5Pin);
+    scheduler.add(&_rxRC5, kRC5Pin, ENABLE_READ_INTERRUPTS);
 #endif
 #if HAVE_ESI
-    scheduler.add(&_rxESI, kESIPin);
+    scheduler.add(&_rxESI, kESIPin, ENABLE_READ_INTERRUPTS);
 #endif
 #if HAVE_SR
-    scheduler.add(&_rxNEC, kSRPin);
-    scheduler.add(&_rxSIRC, kSRPin);
+    scheduler.add(&_rxNEC, kSRPin, ENABLE_READ_INTERRUPTS);
+    scheduler.add(&_rxSIRC, kSRPin, ENABLE_READ_INTERRUPTS);
 #endif
-    scheduler.add(&_rx455, kIR455ReceivePin);
-    scheduler.add(&_rxBeo36, kIRReceivePin);
+    scheduler.add(&_rx455, kIR455ReceivePin, ENABLE_READ_INTERRUPTS);
+    scheduler.add(&_rxBeo36, kIRReceivePin, ENABLE_READ_INTERRUPTS);
 #if HAVE_DATALINK86
-    scheduler.add(&_rxDatalink86, kDatalink86Pin);
+    scheduler.add(&_rxDatalink86, kDatalink86Pin, ENABLE_READ_INTERRUPTS);
 #endif
 #if HAVE_DATALINK80
-    scheduler.add(&_rxDatalink80Tape1, kDatalink80Tape1Pin);
-    scheduler.add(&_rxDatalink80Tape2, kDatalink80Tape2Pin);
+    scheduler.add(&_rxDatalink80Tape1, kDatalink80Tape1Pin, ENABLE_READ_INTERRUPTS);
+    scheduler.add(&_rxDatalink80Tape2, kDatalink80Tape2Pin, ENABLE_READ_INTERRUPTS);
 #endif
 #if HAVE_TECHNICS_SC
+    // TxTechnicsRX is not a standard decoder since it uses two pins and currently does not support interrupt mode.
     scheduler.add(&_rxTechnics);
     // TxTechnicsSC must unlike other encoders always be active.
-    scheduler.add(&_txTechnics);
+    // It should also not use absolute time as that may make the pulses too short
+    scheduler.add(&_txTechnics, nullptr, false);
 #endif
-#if ENABLE_WRITE_INTERRUPTS
+#if ENABLE_WRITE_TIMER
     scheduler.add(&writeScheduler);
 #endif
 
@@ -518,7 +538,7 @@ public:
           break;
         }
         _trigger.prepare(1000 * message.value);
-        scheduler.add(&_trigger, this);
+        txScheduler.add(&_trigger, this);
         repeatTask = &_trigger;
       }
       break;
@@ -532,7 +552,11 @@ public:
         break;
       }
       _txRC5.prepare(message.value);
+#if ENABLE_WRITE_TIMER
+      writeScheduler.add(&_txRC5, kRC5Pin, this);
+#else
       scheduler.add(&_txRC5, this);
+#endif
       repeatTask = &_txRC5;
       break;
 #endif
@@ -545,7 +569,11 @@ public:
         break;
       }
       _txESI.prepare(message.value, message.bits);
+#if ENABLE_WRITE_TIMER
+      writeScheduler.add(&_txESI, kESIPin, this);
+#else
       scheduler.add(&_txESI, this);
+#endif
       repeatTask = &_txESI;
       break;
 #endif
@@ -559,7 +587,11 @@ public:
         break;
       }
       _txNEC.prepare((repeatMessage && message.protocol == NEC) ? 0 : message.value);
+#if ENABLE_WRITE_TIMER
+      writeScheduler.add(&_txNEC, kSRPin, this);
+#else
       scheduler.add(&_txNEC, this);
+#endif
       repeatTask = &_txNEC;
       break;
 
@@ -570,7 +602,11 @@ public:
         break;
       }
       _txSIRC.prepare(message.value, message.bits);
+#if ENABLE_WRITE_TIMER
+      writeScheduler.add(&_txSIRC, kSRPin, this);
+#else
       scheduler.add(&_txSIRC, this);
+#endif
       repeatTask = &_txSIRC;
       break;
 #endif
@@ -584,7 +620,11 @@ public:
           break;
         }
         _txDatalink86.prepare(message.value, message.bits, false, repeatMessage);
+#if ENABLE_WRITE_TIMER
+        writeScheduler.add(&_txDatalink86, kDatalink86Pin, this);
+#else
         scheduler.add(&_txDatalink86, this);
+#endif
         repeatTask = &_txDatalink86;
       }
       break;
@@ -600,7 +640,11 @@ public:
           break;
         }
         _txDatalink80.prepare(message.value);
+#if ENABLE_WRITE_TIMER
+        writeScheduler.add(&_txDatalink80, message.bus < 2 ? kDatalink80Pin1 : kDatalink80Pin2, this);
+#else
         scheduler.add(&_txDatalink80, this);
+#endif
         repeatTask = &_txDatalink80;
       }
       break;
@@ -611,6 +655,7 @@ public:
       {
         if (!_txTechnics.done())
         {
+          message.protocol_name = nullptr;
           _technicsSendBuffer.push_back(message);
           break;
         }
@@ -619,7 +664,7 @@ public:
         {
           --message.repeat;
           message.protocol_name = nullptr;
-          _technicsSendBuffer.push_back(message); 
+          _technicsSendBuffer.push_back(message);
         }
       }
       break;
@@ -650,10 +695,33 @@ void sendInseparates(Message &message)
 void setupInseparates()
 {
   scheduler.begin();
+  scheduler.add(&printer);
   mainTask.begin();
 }
 
 void loopInseparates()
 {
+  ins_micros_t now = fastMicros();
+
+#if DEBUG_FULL_TIMING
+  TimeInserter tInserter(tAcc, now);
+#endif
+#if DEBUG_CYCLE_TIMING
+  cCheck.tick(now);
+#endif
+
   scheduler.poll();
+
+  //if (timekeeper.microsSinceReset(now) < 5000000L)
+  if (timekeeper.microsSinceReset(now) < 1000000L)
+  {
+    return;
+  }
+  timekeeper.reset();
+#if DEBUG_FULL_TIMING
+  tAcc.report(printer);
+#endif
+#if DEBUG_CYCLE_TIMING
+  cCheck.report(printer);
+#endif
 }

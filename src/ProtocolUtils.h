@@ -3,9 +3,28 @@
 #ifndef _INS_PROTOCOL_UTILS_H_
 #define _INS_PROTOCOL_UTILS_H_
 
-#include "Inseparates.h"
+#ifndef INS_OUTPUT_FIFO_CHANNEL_COUNT
+#ifdef AVR
+#define INS_OUTPUT_FIFO_CHANNEL_COUNT 0
+#elif defined(ESP32)
+#define INS_OUTPUT_FIFO_CHANNEL_COUNT 4
+#else
+#define INS_OUTPUT_FIFO_CHANNEL_COUNT 2
+#endif
+#endif
 
+#ifndef INS_OUTPUT_FIFO_CHANNEL_LENGTH
+#define INS_OUTPUT_FIFO_LENGTH 1024
+#endif
+
+#include "Inseparates.h"
 #include "PlatformTimers.h"
+#include "DebugUtils.h"
+
+#if INS_OUTPUT_FIFO_CHANNEL_COUNT
+#include <deque>
+#include <map>
+#endif
 
 namespace inseparates
 {
@@ -370,36 +389,41 @@ public:
 	}
 };
 
-#if INS_HAVE_HW_TIMER || UNIT_TEST
+#if (INS_HAVE_HW_TIMER || UNIT_TEST) && INS_OUTPUT_FIFO_CHANNEL_COUNT
 class InterruptWriteScheduler : public SteppedTask
 {
 	friend class InterruptPinWriter;
 
+	struct TaskData
+	{
+		SteppedTask *task;
+		Scheduler::Delegate *delegate;
+		ins_micros_t micros;
+		uint8_t pin;
+	};
 	struct OutputData
 	{
-		uint16_t micros;
+		ins_micros_t micros;
 		uint8_t pin;
 		uint8_t state;
 		uint8_t mode;
 	};
 
 	uint16_t _pollIntervalMicros;
-	uint16_t _futureMicros;
-	uint16_t _currentMicros;
-	uint16_t _currentDelta;
-	bool _didWrite = false;
-	SteppedTask *_task = nullptr;
-	Scheduler::Delegate *_delegate;
-	LockFreeFIFO<OutputData, INS_INPUT_FIFO_LENGTH> _outputFIFO;
+	LockFreeFIFO<OutputData, INS_OUTPUT_FIFO_LENGTH> _outputFIFO[INS_OUTPUT_FIFO_CHANNEL_COUNT];
+	OutputData *_writeRef;
+	TaskData _outputFIFO_current[INS_OUTPUT_FIFO_CHANNEL_COUNT];
+	std::deque<TaskData> _waitlist;
+	std::deque<TaskData> _donelist;
 #ifndef UNIT_TEST
 	HWTimer _timer;
 #endif
-	static InterruptWriteScheduler *s_this;
 public:
-	InterruptWriteScheduler(uint16_t pollIntervalMicros, uint16_t futureMicros) :
-		_pollIntervalMicros(pollIntervalMicros), _futureMicros(futureMicros)
+	InterruptWriteScheduler(uint16_t pollIntervalMicros) :
+		_pollIntervalMicros(pollIntervalMicros)
 	{
-		s_this = this;
+		instance(this);
+		memset(_outputFIFO_current, 0, sizeof(_outputFIFO_current));
 #ifdef UNIT_TEST
 		attachInterruptInterval(pollIntervalMicros, timerISR);
 #else
@@ -407,74 +431,125 @@ public:
 #endif
 	}
 
-	bool add(SteppedTask *task, Scheduler::Delegate *delegate = nullptr)
+	void add(SteppedTask *task, uint8_t pin, Scheduler::Delegate *delegate = nullptr)
 	{
-		if (_task)
+		TaskData td = {task, delegate, 0, pin};
+		if (!activate(td))
 		{
-			InsError(*(uint32_t*)"txst");
-			return false;
+			_waitlist.push_back(td);
 		}
-		_delegate = delegate;
-		scheduleInternal(task);
-		return true;
-	}
-
-	bool active()
-	{
-		return !!_task;
 	}
 
 	uint16_t SteppedTask_step() override
 	{
-		if (_task)
-			scheduleInternal(_task);
-		return _pollIntervalMicros * (INS_INPUT_FIFO_LENGTH / 2);
+		while (_donelist.size())
+		{
+			TaskData &td = _donelist.front();
+			td.delegate->SchedulerDelegate_done(td.task);
+			_donelist.pop_front();
+		}
+
+		for (uint8_t i = 0; i < INS_OUTPUT_FIFO_CHANNEL_COUNT; ++i)
+		{
+			if (_outputFIFO_current[i].task)
+			{
+				push(i, false);
+			}
+		}
+
+		for (uint8_t i = 0; i < _waitlist.size(); ++i)
+		{
+			TaskData &td = _waitlist[i];
+			if (activate(td))
+			{
+				_waitlist.erase(_waitlist.begin() + i);
+				--i;
+			}
+		}
+		return _pollIntervalMicros * 10;
 	}
 
 private:
-	void scheduleInternal(SteppedTask *task)
+	INS_IRAM_ATTR static InterruptWriteScheduler *instance(InterruptWriteScheduler *timer = nullptr)
 	{
-		if (!_task)
+		static InterruptWriteScheduler *s_instance;
+		if (timer)
+			s_instance = timer;
+		return s_instance;
+	}
+
+	bool activate(TaskData &td)
+	{
+		for (uint8_t i = 0; i < INS_OUTPUT_FIFO_CHANNEL_COUNT; ++i)
 		{
-			if (_currentMicros < fastMicros() + _futureMicros)
-				_currentMicros = fastMicros() + _futureMicros;
-			_currentDelta = 0;
-			_task = task;
-		}
-		while (!_outputFIFO.full())
-		{
-			uint16_t delta = task->SteppedTask_step();
-			// The task should have called write now.
-			_currentMicros += _currentDelta;
-			_currentDelta = delta;
-			if (_didWrite)
+			if (_outputFIFO_current[i].pin == td.pin)
 			{
-				_didWrite = false;
+				if (_outputFIFO_current[i].task)
+					return false;
+				_outputFIFO_current[i].task = td.task;
+				_outputFIFO_current[i].delegate = td.delegate;
+				push(i, _outputFIFO[i].empty());
+				return true;
+			}
+		}
+		for (uint8_t i = 0; i < INS_OUTPUT_FIFO_CHANNEL_COUNT; ++i)
+		{
+			// If there's more parallel writes in progress than INS_OUTPUT_FIFO_CHANNEL_COUNT
+			// there's a risk that we go back in time on a FIFO or pin if we don't wait for all FIFOs to be empty here!
+			// That will cause overlapping or all writes to be sent in a burst!
+			// It should also be safe if all FIFOs haven't been used since they all were empty last since an unsafe ABCA cannot happen then.
+			if (_outputFIFO[i].empty())
+			{
+				_outputFIFO_current[i] = td;
+				push(i, true);
+				return true;
+			}
+		}
+		return false;
+	}
+
+	bool push(uint8_t index, bool first)
+	{
+		if (first)
+		{
+			// It might be a good idea to not go back in time here.
+			// But that must be protected from wraparound.
+			_outputFIFO_current[index].micros = fastMicros() + _pollIntervalMicros;
+		}
+		while (!_outputFIFO[index].full())
+		{
+			auto &w = _outputFIFO[index].writeRef();
+			_writeRef = &w;
+			uint16_t delta = _outputFIFO_current[index].task->SteppedTask_step();
+			// The task should have called write now.
+
+			if (_writeRef)
+			{
+				// The task did not write.
+				w.pin = -1;
 			}
 			else
 			{
-				_outputFIFO.writeRef().pin = -1;
+				INS_ASSERT(w.pin == _outputFIFO_current[index].pin);
 			}
-			_outputFIFO.writeRef().micros = _currentMicros;
-			_outputFIFO.push();
+			w.micros = _outputFIFO_current[index].micros;
+			_outputFIFO[index].push();
+
 			if (delta == kInvalidDelta)
 			{
-				SteppedTask *task = _task;
-				_task = nullptr;
-				if (_delegate)
-					_delegate->SchedulerDelegate_done(task);
-				return;
+				if (_outputFIFO_current[index].delegate)
+					_donelist.push_back(_outputFIFO_current[index]);
+				_outputFIFO_current[index].task = nullptr;
+				return true;
 			}
-			if (delta == kInvalidDelta)
-			{
-				_currentDelta = 0;
-			}
+			_outputFIFO_current[index].micros += delta;
 		}
+		return false;
 	}
 
 	void write(uint8_t pin, uint8_t state, uint8_t mode)
 	{
-		if (!_task)
+		if (!_writeRef)
 		{
 			// This can happen during initialization.
 			if (mode == OUTPUT)
@@ -489,51 +564,50 @@ private:
 			}
 			return;
 		}
-		_outputFIFO.writeRef().pin = pin;
-		_outputFIFO.writeRef().state = state;
-		_outputFIFO.writeRef().mode = mode;
-		_didWrite = true;
+		_writeRef->pin = pin;
+		_writeRef->state = state;
+		_writeRef->mode = mode;
+		_writeRef = nullptr;
 	}
 
-	void INS_IRAM_ATTR pollOutputISR()
+	INS_IRAM_ATTR static void timerISR()
 	{
-		if (_outputFIFO.empty())
+		InterruptWriteScheduler *s_this = instance();
+		for (uint8_t i = 0; i < INS_OUTPUT_FIFO_CHANNEL_COUNT; ++i)
 		{
-			return;
+			auto &fifo = s_this->_outputFIFO[i];
+			if (fifo.empty())
+			{
+				continue;
+			}
+			ins_micros_t now = fastMicros();
+			auto &r = fifo.readRef();
+			ins_micros_t targetMicros = r.micros;
+			ins_smicros_t timeLeft = targetMicros - now;
+			if (timeLeft > s_this->_pollIntervalMicros / 2)
+			{
+				continue;
+			}
+			uint8_t pin = r.pin;
+			if (pin == (uint8_t)-1)
+			{
+				fifo.pop();
+				continue;
+			}
+			uint8_t state = r.state;
+			uint8_t mode = r.mode;
+			fifo.pop();
+			if (mode == OUTPUT)
+			{
+				digitalWrite(pin, state);
+				pinMode(pin, mode);
+			}
+			else
+			{
+				pinMode(pin, mode);
+				digitalWrite(pin, state);
+			}
 		}
-
-		uint16_t now = fastMicros();
-		uint16_t targetMicros = _outputFIFO.readRef().micros;
-		int16_t timeLeft = targetMicros - now;
-		if (timeLeft > _pollIntervalMicros / 2)
-		{
-			return;
-		}
-
-		uint8_t pin = _outputFIFO.readRef().pin;
-		if (pin == (uint8_t)-1)
-		{
-			_outputFIFO.pop();
-			return;
-		}
-		uint8_t state = _outputFIFO.readRef().state;
-		uint8_t mode = _outputFIFO.readRef().mode;
-		_outputFIFO.pop();
-		if (mode == OUTPUT)
-		{
-			digitalWrite(pin, state);
-			pinMode(pin, mode);
-		}
-		else
-		{
-			pinMode(pin, mode);
-			digitalWrite(pin, state);
-		}
-	}
-
-	static void INS_IRAM_ATTR timerISR()
-	{
-		s_this->pollOutputISR();
 	}
 };
 

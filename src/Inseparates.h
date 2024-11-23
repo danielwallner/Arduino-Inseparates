@@ -4,25 +4,62 @@
 #define _INSEPARATES_H_
 
 #include "FastTime.h"
+
 #ifndef AVR
 #include <atomic>
 #endif
+#ifdef UNIT_TEST
+#include <assert.h>
+#else
+#if defined(ESP8266) || defined(ESP32)
+#define USE_FUNCTIONAL_INTERRUPT 1
+#include <functional>
+#include <FunctionalInterrupt.h>
+#endif
+#endif
 
 #ifndef INS_SEQUENCER_MAX_NUM_TASKS
+#ifdef AVR
 #define INS_SEQUENCER_MAX_NUM_TASKS 8
+#else
+#define INS_SEQUENCER_MAX_NUM_TASKS 16
 #endif
+#endif
+
+#ifndef INS_SEQUENCER_MAX_DECODERS
+#ifdef AVR
+#define INS_SEQUENCER_MAX_DECODERS 8
+#else
+#define INS_SEQUENCER_MAX_DECODERS 16
+#endif
+#endif
+
 #ifndef INS_SEQUENCER_MAX_NUM_INPUTS
+#ifdef AVR
 #define INS_SEQUENCER_MAX_NUM_INPUTS 8
+#else
+#define INS_SEQUENCER_MAX_NUM_INPUTS 16
 #endif
+#endif
+
 #ifndef INS_INPUT_FIFO_LENGTH
-#define INS_INPUT_FIFO_LENGTH 32
+#ifdef AVR
+#define INS_INPUT_FIFO_LENGTH 64
+#else
+#define INS_INPUT_FIFO_LENGTH 1024
+#endif
+#endif
+
+#ifndef AVR
+#include <map>
+#include <memory>
 #endif
 
 #define INS_STR_(v) #v
 #define INS_STR(v) INS_STR_(v)
 
-#ifdef IRAM_ATTR
-#define INS_IRAM_ATTR IRAM_ATTR
+#ifdef ICACHE_RAM_ATTR
+#define INS_IRAM_ATTR ICACHE_RAM_ATTR
 #else
 #define INS_IRAM_ATTR
 #endif
@@ -68,10 +105,70 @@ public:
 	virtual void Decoder_timeout(uint8_t pinState) = 0;
 };
 
+#ifdef AVR
+template<typename T, size_t N>
+class LockFreeFIFO {
+private:
+	T _data[N];
+	volatile uint8_t _writePos = 0;
+	volatile uint8_t _readPos = 0;
+public:
+	bool full() const { return (_writePos + 1) % N == _readPos; }
+	T& writeRef() { return _data[_writePos]; }
+	void push() { _writePos = (_writePos + 1) % N; }
+
+	bool empty() const { return _readPos == _writePos; }
+	const T& readRef() const { return _data[_readPos]; }
+	void pop() { _readPos = (_readPos + 1) % N; }
+};
+#else
+template<typename T, size_t N>
+class LockFreeFIFO {
+private:
+	T data[N];
+	std::atomic<uint8_t> _writePos = {0};
+	std::atomic<uint8_t> _readPos = {0};
+public:
+	INS_IRAM_ATTR bool full() const
+	{
+		uint8_t currentWritePos = _writePos.load(std::memory_order_relaxed);
+		uint8_t nextWritePos = (currentWritePos + 1) % N;
+		uint8_t currenReadPos = _readPos.load(std::memory_order_acquire);
+		return nextWritePos == currenReadPos;
+	}
+	INS_IRAM_ATTR T& writeRef()
+	{
+		uint8_t currentWritePos = _writePos.load(std::memory_order_relaxed);
+		return data[currentWritePos];
+	}
+	INS_IRAM_ATTR void push()
+	{
+		uint8_t currentWritePos = _writePos.load(std::memory_order_relaxed);
+		uint8_t nextWritePos = (currentWritePos + 1) % N;
+		_writePos.store(nextWritePos, std::memory_order_release);
+	}
+
+	INS_IRAM_ATTR bool empty() const
+	{
+		return _readPos.load(std::memory_order_relaxed) == _writePos.load(std::memory_order_acquire);
+	}
+	INS_IRAM_ATTR const T& readRef() const
+	{
+		uint8_t currentReadPos = _readPos.load(std::memory_order_relaxed);
+		return data[currentReadPos];
+	}
+	INS_IRAM_ATTR void pop()
+	{
+		uint8_t currentReadPos = _readPos.load(std::memory_order_relaxed);
+		uint8_t nextReadPos = (currentReadPos + 1) % N;
+		_readPos.store(nextReadPos, std::memory_order_release);
+	}
+};
+#endif
+
 // Input polling and task scheduling
 class Scheduler
 {
-	friend class InterruptScheduler;
 public:
 	class Delegate
 	{
@@ -80,40 +177,193 @@ public:
 	};
 
 private:
+	struct InputData
+	{
+		ins_micros_t micros;
+		uint8_t pin;
+		uint8_t state;
+	};
+
 #ifdef AVR
-	typedef uint8_t pin_usage_t;
+#define MAX_PIN_CALLBACKS 3
 #else
+#define MAX_PIN_CALLBACKS 8
+#endif
+	class PinStatePusher
+	{
+		Scheduler *_scheduler;
+		uint8_t _pin;
+	public:
+		PinStatePusher(Scheduler *scheduler, uint8_t pin) : _scheduler(scheduler), _pin(pin)
+		{
+#ifdef UNIT_TEST
+			attachInterrupt(pin, std::bind(&PinStatePusher::pinISR, this), 0);
+#elif USE_FUNCTIONAL_INTERRUPT
+			attachInterrupt(digitalPinToInterrupt(_pin), std::bind(&PinStatePusher::pinISR, this), CHANGE);
+#else
+			schedulerInstance(_scheduler);
+
+			for (uint8_t i = 0; i < MAX_PIN_CALLBACKS; ++i)
+			{
+				if (s_pinUsage[i] == (uint8_t)-1)
+				{
+					s_pinUsage[i] = _pin;
+					void (*isr)();
+					switch (i)
+					{
+					case 0: isr = pinISR0;
+					case 1: isr = pinISR1;
+					case 2: isr = pinISR2;
+#ifndef AVR
+					case 3: isr = pinISR3;
+					case 4: isr = pinISR4;
+					case 5: isr = pinISR5;
+					case 6: isr = pinISR6;
+					case 7: isr = pinISR7;
+#endif
+					}
+					attachInterrupt(digitalPinToInterrupt(_pin), isr, CHANGE);
+				}
+			}
+#endif
+		}
+		~PinStatePusher()
+		{
+#ifdef UNIT_TEST
+			detachInterrupt(_pin);
+#elif USE_FUNCTIONAL_INTERRUPT
+			detachInterrupt(digitalPinToInterrupt(_pin));
+#else
+			for (uint8_t i; i < MAX_PIN_CALLBACKS; ++i)
+			{
+				if (s_pinUsage[i] == _pin)
+				{
+					s_pinUsage[i] = (uint8_t)-1;
+					break;
+				}
+			}
+#endif
+		}
+
+		uint8_t pin() { return _pin; }
+
+#if UNIT_TEST || USE_FUNCTIONAL_INTERRUPT
+		INS_IRAM_ATTR void pinISR()
+		{
+			auto &inputFifo = _scheduler->_inputFIFO;
+			auto &w = inputFifo.writeRef();
+			w.micros = fastMicros();
+			w.pin = _pin;
+			w.state = digitalRead(_pin);
+			inputFifo.push();
+		}
+#else
+		static uint8_t s_pinUsage[MAX_PIN_CALLBACKS];
+
+		INS_IRAM_ATTR static void pinISR0() { pinISRCommon(s_pinUsage[0]); }
+		INS_IRAM_ATTR static void pinISR1() { pinISRCommon(s_pinUsage[1]); }
+		INS_IRAM_ATTR static void pinISR2() { pinISRCommon(s_pinUsage[2]); }
+#ifndef AVR
+		INS_IRAM_ATTR static void pinISR3() { pinISRCommon(s_pinUsage[3]); }
+		INS_IRAM_ATTR static void pinISR4() { pinISRCommon(s_pinUsage[4]); }
+		INS_IRAM_ATTR static void pinISR5() { pinISRCommon(s_pinUsage[5]); }
+		INS_IRAM_ATTR static void pinISR6() { pinISRCommon(s_pinUsage[6]); }
+		INS_IRAM_ATTR static void pinISR7() { pinISRCommon(s_pinUsage[7]); }
+#endif
+		INS_IRAM_ATTR static void pinISRCommon(uint8_t pin)
+		{
+			auto &inputFifo = schedulerInstance()->_inputFIFO;
+			auto &w = inputFifo.writeRef();
+			w.micros = fastMicros();
+			w.pin = pin;
+			w.state = digitalRead(pin);
+			inputFifo.push();
+		}
+
+		INS_IRAM_ATTR static Scheduler *schedulerInstance(Scheduler *inst = nullptr)
+		{
+			static Scheduler *s_instance;
+			if (inst)
+				s_instance = inst;
+			return s_instance;
+		}
+#endif
+	};
+
+	friend class PinStatePusher;
+
+#if INS_SEQUENCER_MAX_NUM_TASKS <= 8
+	typedef uint8_t task_flags_t;
+#elif INS_SEQUENCER_MAX_NUM_TASKS <= 16
+	typedef uint16_t task_flags_t;
+#elif INS_SEQUENCER_MAX_NUM_TASKS <= 32
+	typedef uint32_t task_flags_t;
+#elif INS_SEQUENCER_MAX_NUM_TASKS <= 64
+	typedef uint64_t task_flags_t;
+#else
+	Too many tasks
+#endif
+#if INS_SEQUENCER_MAX_DECODERS <= 8
+	typedef uint8_t pin_flags_t;
+#elif INS_SEQUENCER_MAX_DECODERS <= 16
+	typedef uint16_t pin_flags_t;
+#elif INS_SEQUENCER_MAX_DECODERS <= 32
+	typedef uint32_t pin_flags_t;
+#elif INS_SEQUENCER_MAX_DECODERS <= 64
+	typedef uint64_t pin_flags_t;
+#else
+	Too many inputs
+#endif
+#if INS_SEQUENCER_MAX_NUM_INPUTS <= 8
+	typedef uint8_t pin_usage_t;
+#elif INS_SEQUENCER_MAX_NUM_INPUTS <= 16
 	typedef uint16_t pin_usage_t;
+#elif INS_SEQUENCER_MAX_NUM_INPUTS <= 32
+	typedef uint32_t pin_usage_t;
+#elif INS_SEQUENCER_MAX_NUM_INPUTS <= 64
+	typedef uint64_t pin_usage_t;
+#else
+	Too many decoders
 #endif
 
-	SteppedTask *_tasks_task[INS_SEQUENCER_MAX_NUM_TASKS];
+	LockFreeFIFO<InputData, INS_INPUT_FIFO_LENGTH> _inputFIFO;
+
+	SteppedTask *_tasks_task[INS_SEQUENCER_MAX_NUM_TASKS] = { 0 };
 	Delegate *_tasks_delegate[INS_SEQUENCER_MAX_NUM_TASKS];
-	uint16_t _tasks_targetTime[INS_SEQUENCER_MAX_NUM_TASKS];
+	ins_micros_t _tasks_targetTime[INS_SEQUENCER_MAX_NUM_TASKS];
+	task_flags_t _taskIsAbsolute = 0;
 	uint8_t _maxTask = 0;
 
-	Decoder *_inputs_decoder[INS_SEQUENCER_MAX_NUM_INPUTS];
-	uint16_t _inputs_lastTransitionMicros[INS_SEQUENCER_MAX_NUM_INPUTS];
-	uint16_t _inputs_nextTimeoutMicros[INS_SEQUENCER_MAX_NUM_INPUTS];
-	uint8_t _inputs_pinState[INS_SEQUENCER_MAX_NUM_INPUTS];
-	uint8_t _maxInput = 0;
+	Decoder *_decoders[INS_SEQUENCER_MAX_DECODERS] = { 0 };
+	ins_micros_t _decoders_lastTransitionMicros[INS_SEQUENCER_MAX_DECODERS];
+	ins_micros_t _decoders_nextTimeoutMicros[INS_SEQUENCER_MAX_DECODERS];
+	uint8_t _decoders_pinState[INS_SEQUENCER_MAX_DECODERS];
+	uint8_t _maxDecoder = 0;
 
-	uint8_t _pins_pin[INS_SEQUENCER_MAX_NUM_INPUTS]; // Used in both ISR and polling context! This is probably ok as it is used.
+	// This is used both for polled and interrupt driven pins.
+	// That is somewhat less efficient when mixing pin types.
+	uint8_t _pins_pin[INS_SEQUENCER_MAX_NUM_INPUTS];
 	uint8_t _pins_pinState[INS_SEQUENCER_MAX_NUM_INPUTS];
-	pin_usage_t _pins_usage[INS_SEQUENCER_MAX_NUM_INPUTS];
-	uint8_t _maxPin = 0;
+	// Since there can be multiple decoders using a single pin this is a bit matrix where for each pin the bits corresponds to the decoder index
+	pin_usage_t _pins_usage[INS_SEQUENCER_MAX_NUM_INPUTS] = { 0 };
+	pin_flags_t _pins_isInterrupt = 0;
+	uint8_t _maxPolledPin = 0;
+	uint8_t _maxInterruptPin = 0;
 
 	static const uint8_t PIN_STATE_TIMEOUT = 0x2;
 	static const uint8_t PIN_STATE_REPORTED = 0x1;
 	inline bool timeoutPinState(uint8_t pinState) { return !!((pinState & PIN_STATE_TIMEOUT) >> 1); }
 	inline uint8_t reportedPinState(uint8_t pinState) { return (pinState & PIN_STATE_REPORTED); }
 
+#if AVR
+	PinStatePusher *_pinInterrupts[MAX_PIN_CALLBACKS] = { nullptr };
+#else
+	std::map<uint8_t, std::unique_ptr<PinStatePusher>> _pinInterrupts;
+#endif
+
 public:
 	Scheduler()
 	{
-		// All these signals that the slot is in use.
-		memset(_tasks_task, 0, sizeof(_tasks_task));
-		memset(_inputs_decoder, 0, sizeof(_inputs_decoder));
-		memset(_pins_usage, 0, sizeof(_pins_usage));
 	}
 
 	void begin()
@@ -124,7 +374,7 @@ public:
 	}
 
 	// Add and step task.
-	bool add(SteppedTask *task, Delegate *delegate = nullptr)
+	bool add(SteppedTask *task, Delegate *delegate = nullptr, bool absolute = true)
 	{
 		for (uint8_t i = 0; i < INS_SEQUENCER_MAX_NUM_TASKS; ++i)
 		{
@@ -134,6 +384,10 @@ public:
 			_tasks_delegate[i] = delegate;
 			_tasks_targetTime[i] = fastMicros();
 			_tasks_targetTime[i] += task->SteppedTask_step();
+			task_flags_t bitMask = 1ULL << i;
+			_taskIsAbsolute &= ~bitMask;
+			if (absolute)
+				_taskIsAbsolute |= bitMask;
 			if (i + 1 > _maxTask)
 				_maxTask = i + 1;
 			return true;
@@ -143,7 +397,7 @@ public:
 	}
 
 	// Add task after microseconds.
-	bool addDelayed(SteppedTask *task, uint16_t delayUS, Delegate *delegate = nullptr)
+	bool addDelayed(SteppedTask *task, ins_micros_t delayUS, Delegate *delegate = nullptr, bool absolute = true)
 	{
 		for (uint8_t i = 0; i < INS_SEQUENCER_MAX_NUM_TASKS; ++i)
 		{
@@ -153,6 +407,10 @@ public:
 			_tasks_delegate[i] = delegate;
 			_tasks_targetTime[i] = fastMicros();
 			_tasks_targetTime[i] += delayUS;
+			task_flags_t bitMask = 1ULL << i;
+			_taskIsAbsolute &= ~bitMask;
+			if (absolute)
+				_taskIsAbsolute |= bitMask;
 			if (i + 1 > _maxTask)
 				_maxTask = i + 1;
 			return true;
@@ -200,56 +458,82 @@ public:
 	}
 
 	// Add Decoder.
-	bool add(Decoder *decoder, uint8_t pin)
+	bool add(Decoder *decoder, uint8_t pin, bool interrupt = false)
 	{
-		for (int i = 0; i < INS_SEQUENCER_MAX_NUM_INPUTS; ++i)
+#ifdef AVR
+		// TODO: make this correct for other versions than 328P
+		if (pin < 2 || pin > 3)
+			interrupt = false; // This should perhaps be reported as an error instead.
+#endif
+#ifdef ESP8266
+		if (pin == 16)
+			interrupt = false;
+#endif
+		for (uint8_t i = 0; i < INS_SEQUENCER_MAX_NUM_INPUTS; ++i)
 		{
-			if (_inputs_decoder[i])
+			if (_decoders[i] == decoder)
+			{
+				InsError(*(uint32_t*)"dupl");
+				return false;
+			}
+			if (_decoders[i])
 				continue;
-			_inputs_decoder[i] = decoder;
-			uint16_t now = fastMicros();
-			_inputs_lastTransitionMicros[i] = now;
-			_inputs_nextTimeoutMicros[i] = now;
-			if (i + 1 > _maxInput)
-				_maxInput = i + 1;
+			_decoders[i] = decoder;
+			ins_micros_t now = fastMicros();
+			_decoders_lastTransitionMicros[i] = now;
+			_decoders_nextTimeoutMicros[i] = now;
+			if (i + 1 > _maxDecoder)
+				_maxDecoder = i + 1;
 
-			int p = 0;
-			// Try to find matching slot.
-			for (; p < _maxPin; ++p)
+			uint8_t p = pinIndex(pin);
+			bool newPin = !_pins_usage[p];
+			if (newPin)
 			{
-				if (!_pins_usage[p] || _pins_pin[p] != pin)
-					continue;
-				break;
-			}
-			// Else try to find free slot.
-			if (p == _maxPin)
-			{
-				for (p = 0; p < INS_SEQUENCER_MAX_NUM_INPUTS; ++p)
-				{
-					if (_pins_usage[p])
-						continue;
-					_pins_pin[p] = pin;
+				_pins_pin[p] = pin;
 #if INS_ENABLE_INPUT_FILTER
-					_pins_pinState[p] = 3 * digitalRead(pin);
+				_pins_pinState[p] = 3 * digitalRead(pin);
 #else
-					_pins_pinState[p] = digitalRead(pin);
+				_pins_pinState[p] = digitalRead(pin);
 #endif
-					break;
-				}
-				if (p == INS_SEQUENCER_MAX_NUM_INPUTS)
-				{
-					InsError(*(uint32_t*)"dovf");
-					return false;
-				}
 			}
 #if INS_ENABLE_INPUT_FILTER
-			_inputs_pinState[i] = _pins_pinState[p] > 1;
+			_decoders_pinState[i] = _pins_pinState[p] > 1;
 #else
-			_inputs_pinState[i] = !!_pins_pinState[p];
+			_decoders_pinState[i] = !!_pins_pinState[p];
 #endif
-			_pins_usage[p] |= 1 << i;
-			if (i + 1 > _maxPin)
-				_maxPin = i + 1;
+			_pins_usage[p] |= 1ULL << i;
+			if (interrupt)
+			{
+				if (i + 1 > _maxInterruptPin)
+					_maxInterruptPin = i + 1;
+
+				pin_flags_t pinIndexMask = 1ULL << p;
+				_pins_isInterrupt |= pinIndexMask;
+				if (newPin)
+				{
+#ifdef UNIT_TEST
+					assert(!_pinInterrupts.count(pin));
+#endif
+#if AVR
+					for (uint8_t psp = 0; psp < MAX_PIN_CALLBACKS; ++psp)
+					{
+						if (_pinInterrupts[psp])
+						{
+							continue;
+						}
+						_pinInterrupts[psp] = new PinStatePusher(this, pin);
+						break;
+					}
+#else
+					_pinInterrupts[pin] = std::unique_ptr<PinStatePusher>(new PinStatePusher(this, pin));
+#endif
+				}
+			}
+			else
+			{
+				if (i + 1 > _maxPolledPin)
+					_maxPolledPin = i + 1;
+			}
 			return true;
 		}
 		InsError(*(uint32_t*)"dovf");
@@ -259,39 +543,79 @@ public:
 	// Remove decoder.
 	bool remove(Decoder *decoder)
 	{
-		int i = 0;
-		for (; i < _maxInput; ++i)
+		for (uint8_t i = 0; i < _maxDecoder; ++i)
 		{
-			if (_inputs_decoder[i] != decoder)
+			if (_decoders[i] != decoder)
 				continue;
-			_inputs_decoder[i] = nullptr;
+			pin_usage_t decoderBitMask = 1ULL << i;
+			pin_flags_t pinIndexMask = 1ULL;
+			for (uint8_t p = 0; p < _maxPolledPin || p < _maxInterruptPin; ++p, pinIndexMask <<= 1)
+			{
+				if (!(_pins_isInterrupt & pinIndexMask))
+				{
+					continue;
+				}
+				if (!(_pins_usage[p] & decoderBitMask))
+					continue;
+				_pins_isInterrupt &= ~pinIndexMask;
+#if AVR
+				for (uint8_t psp = 0; psp < MAX_PIN_CALLBACKS; ++psp)
+				{
+					if (_pinInterrupts[psp] && _pinInterrupts[psp]->pin() == _pins_pin[p])
+					{
+						delete _pinInterrupts[psp];
+						_pinInterrupts[psp] = nullptr;
+						break;
+					}
+				}
+#else
+				_pinInterrupts.erase(_pins_pin[p]);
+#endif
+				break;
+			}
 			break;
 		}
-		if (i == _maxInput)
+		uint8_t i = 0;
+		for (; i < _maxDecoder; ++i)
+		{
+			if (_decoders[i] != decoder)
+				continue;
+			_decoders[i] = nullptr;
+			break;
+		}
+		if (i == _maxDecoder)
 		{
 			InsError(*(uint32_t*)"nsdc");
 			return false;
 		}
 
-		pin_usage_t mask = 1 << i;
-		for (int p = 0; p < _maxPin; ++p)
+		pin_usage_t decoderBitMask = 1ULL << i;
+		for (uint8_t p = 0;  p < _maxPolledPin || p < _maxInterruptPin; ++p)
 		{
-			if (!(_pins_usage[p] & mask))
+			if (!(_pins_usage[p] & decoderBitMask))
 				continue;
-			_pins_usage[p] &= ~mask;
+			_pins_usage[p] &= ~decoderBitMask;
 			break;
 		}
-		for (int i = _maxInput; i; --i)
+		for (uint8_t i = _maxDecoder; i; --i)
 		{
-			if (_inputs_decoder[i - 1])
+			if (_decoders[i - 1])
 				break;
-			_maxInput = i;
+			_maxDecoder = i;
 		}
-		for (int p = _maxPin; p; --p)
+		for (uint8_t p = _maxPolledPin; p; --p)
 		{
-			if (_pins_usage[p - 1])
+			pin_flags_t pinIndexMask = 1ULL << (p - 1);
+			if (_pins_usage[p - 1] && !(pinIndexMask & _pins_isInterrupt))
 				break;
-			_maxPin = p;
+			_maxPolledPin = p;
+		}
+		for (uint8_t p = _maxInterruptPin; p; --p)
+		{
+			pin_flags_t pinIndexMask = 1ULL << (p - 1);
+			if (_pins_usage[p - 1] && (pinIndexMask & _pins_isInterrupt))
+				break;
+			_maxInterruptPin = p;
 		}
 		return true;
 	}
@@ -299,9 +623,9 @@ public:
 	// Check if decoder is active.
 	bool active(Decoder *decoder)
 	{
-		for (int i = 0; i < _maxInput; ++i)
+		for (uint8_t i = 0; i < _maxDecoder; ++i)
 		{
-			if (_inputs_decoder[i] != decoder)
+			if (_decoders[i] != decoder)
 				continue;
 			return true;
 		}
@@ -313,7 +637,7 @@ public:
 	{
 		pollInputs();
 		pollTasks();
-		pollInputs();
+		pollInputFIFOs();
 		pollTimeouts();
 	}
 
@@ -325,11 +649,44 @@ public:
 #endif
 
 private:
+	uint8_t pinIndex(uint8_t pin, bool findOnly = false)
+	{
+		uint8_t p = 0;
+		// Try to find matching slot.
+		for (; p < _maxPolledPin || p < _maxInterruptPin; ++p)
+		{
+			if (!_pins_usage[p] || _pins_pin[p] != pin)
+				continue;
+			return p;
+		}
+		if (findOnly)
+		{
+			InsError(*(uint32_t*)"pnfd");
+			return -1;
+		}
+		// Else try to find free slot.
+		for (p = 0; p < INS_SEQUENCER_MAX_NUM_INPUTS; ++p)
+		{
+			if (_pins_usage[p])
+				continue;
+			return p;
+		}
+		if (p == INS_SEQUENCER_MAX_NUM_INPUTS)
+		{
+			InsError(*(uint32_t*)"povf");
+			return -1;
+		}
+		return p;
+	}
+
 	void pollInputs()
 	{
-		uint16_t now = fastMicros();
-		for (int p = 0; p < _maxPin; ++p)
+		pin_flags_t pinIndexMask = 1ULL;
+		ins_micros_t now = fastMicros();
+		for (uint8_t p = 0; p < _maxPolledPin || p < _maxInterruptPin; ++p, pinIndexMask <<= 1)
 		{
+			if (_pins_isInterrupt & pinIndexMask)
+				continue;
 			if (!_pins_usage[p])
 				continue;
 #if INS_ENABLE_INPUT_FILTER // Removes single glitches
@@ -355,19 +712,19 @@ private:
 			digitalWrite(INS_SAMPLE_DEBUG_PIN, s_sampleToggle);
 #endif
 			pin_usage_t usageLeft = _pins_usage[p];
-			for (int i = 0; usageLeft && i < _maxInput; ++i)
+			for (uint8_t i = 0; usageLeft && i < _maxDecoder; ++i)
 			{
-				pin_usage_t mask = 1 << i;
-				if (!(_pins_usage[p] & mask))
+				pin_usage_t decoderBitMask = 1ULL << i;
+				if (!(usageLeft & decoderBitMask))
 					continue;
-				usageLeft &= ~mask;
+				usageLeft &= ~decoderBitMask;
 
-				if (newPinState == reportedPinState(_inputs_pinState[i]))
+				if (newPinState == reportedPinState(_decoders_pinState[i]))
 				{
 					continue;
 				}
-				uint16_t timeToReport = now -_inputs_lastTransitionMicros[i];
-				if (timeoutPinState(_inputs_pinState[i]))
+				uint16_t timeToReport = now -_decoders_lastTransitionMicros[i];
+				if (timeoutPinState(_decoders_pinState[i]))
 				{
 					timeToReport = 0;
 				}
@@ -375,34 +732,87 @@ private:
 				{
 					timeToReport = 1;
 				}
-				uint16_t delta = _inputs_decoder[i]->Decoder_pulse(reportedPinState(_inputs_pinState[i]), timeToReport);
-				_inputs_pinState[i] = newPinState; // Resets timeout state
-				_inputs_nextTimeoutMicros[i] = now + delta;
-				_inputs_lastTransitionMicros[i] = now;
+
+				uint16_t delta = _decoders[i]->Decoder_pulse(reportedPinState(_decoders_pinState[i]), timeToReport);
+#ifdef UNIT_TEST
+				assert(delta <= SteppedTask::kMaxSleepMicros);
+#endif
+				_decoders_pinState[i] = newPinState; // Resets timeout state
+				_decoders_nextTimeoutMicros[i] = now + delta;
+				_decoders_lastTransitionMicros[i] = now;
 			}
 			now = fastMicros();
 		}
 	}
 
+	void pollInputFIFOs()
+	{
+		while (!_inputFIFO.empty())
+		{
+			ins_micros_t now = _inputFIFO.readRef().micros;
+			uint8_t pin = _inputFIFO.readRef().pin;
+			uint8_t newPinState = _inputFIFO.readRef().state;
+			_inputFIFO.pop();
+
+			pin_flags_t pinIndexMask = 1ULL;
+			for (uint8_t p = 0; p < _maxPolledPin || p < _maxInterruptPin; ++p, pinIndexMask <<= 1)
+			{
+				if (pin != _pins_pin[p] || !_pins_usage[p])
+					continue;
+				_pins_pinState[p] = newPinState;
+				pin_usage_t usageLeft = _pins_usage[p];
+				for (uint8_t i = 0; usageLeft && i < _maxDecoder; ++i)
+				{
+					pin_usage_t decoderBitMask = 1ULL << i;
+					if (!(usageLeft & decoderBitMask))
+						continue;
+					usageLeft &= ~decoderBitMask;
+
+					if (newPinState == reportedPinState(_decoders_pinState[i]))
+					{
+						continue;
+					}
+					uint16_t timeToReport = now -_decoders_lastTransitionMicros[i];
+					if (timeoutPinState(_decoders_pinState[i]))
+					{
+						timeToReport = 0;
+					}
+					else if (timeToReport == 0)
+					{
+						timeToReport = 1;
+					}
+					uint16_t delta = _decoders[i]->Decoder_pulse(reportedPinState(_decoders_pinState[i]), timeToReport);
+#ifdef UNIT_TEST
+					assert(delta <= SteppedTask::kMaxSleepMicros);
+#endif
+					_decoders_pinState[i] = newPinState; // Resets timeout state
+					_decoders_nextTimeoutMicros[i] = now + delta;
+					_decoders_lastTransitionMicros[i] = now;
+				}
+			}
+		}
+	}
+
 	void pollTimeouts()
 	{
-		uint16_t now = fastMicros();
-		for (int i = 0; i < _maxInput; ++i)
+		ins_micros_t now = fastMicros();
+		for (uint8_t i = 0; i < _maxDecoder; ++i)
 		{
-			if (!_inputs_decoder[i])
+			if (!_decoders[i])
 				continue;
 
-			if (_inputs_nextTimeoutMicros[i] != _inputs_lastTransitionMicros[i])
+			if (_decoders_nextTimeoutMicros[i] != _decoders_lastTransitionMicros[i])
 			{
-				if (int16_t(_inputs_nextTimeoutMicros[i] - now) < 0)
+				if (ins_smicros_t(_decoders_nextTimeoutMicros[i] - now) < 0)
 				{
 #ifdef INS_TIMEOUT_DEBUG_PIN
 					static uint8_t s_timeoutToggle;
 					s_timeoutToggle ^= 1;
 					digitalWrite(INS_TIMEOUT_DEBUG_PIN, s_timeoutToggle);
 #endif
-					_inputs_decoder[i]->Decoder_timeout(reportedPinState(_inputs_pinState[i]));
-					_inputs_pinState[i] |= PIN_STATE_TIMEOUT;
+					_decoders[i]->Decoder_timeout(reportedPinState(_decoders_pinState[i]));
+					_decoders_pinState[i] |= PIN_STATE_TIMEOUT;
+					_decoders_nextTimeoutMicros[i] = _decoders_lastTransitionMicros[i];
 				}
 			}
 		}
@@ -410,19 +820,25 @@ private:
 
 	void pollTasks()
 	{
-		uint16_t now = fastMicros();
-		for (int i = 0 ; i < _maxTask; ++i)
+		ins_micros_t now = fastMicros();
+		for (uint8_t i = 0 ; i < _maxTask; ++i)
 		{
 			if (!_tasks_task[i])
 				continue;
-			int16_t timeLeft = _tasks_targetTime[i] - now;
+			ins_smicros_t timeLeft = _tasks_targetTime[i] - now;
 			if (timeLeft > 0)
 			{
 				continue;
 			}
 			uint16_t delta = _tasks_task[i]->SteppedTask_step();
-			_tasks_targetTime[i] += delta;
 			now = fastMicros();
+			if (_taskIsAbsolute & (1ULL << i))
+				// Try to keep up with absolute time.
+				// This may lead to shorter delays when attempting to keep up.
+				_tasks_targetTime[i] += delta;
+			else
+				// Always wait at least the delay
+				_tasks_targetTime[i] = now + delta;
 			if (delta == SteppedTask::kInvalidDelta)
 			{
 				SteppedTask *task = _tasks_task[i];
@@ -434,205 +850,6 @@ private:
 		}
 	}
 };
-
-#ifdef AVR
-template<typename T, size_t N>
-class LockFreeFIFO {
-private:
-	T _data[N];
-	volatile uint8_t _writePos = 0;
-	volatile uint8_t _readPos = 0;
-public:
-	bool full() const { return (_writePos + 1) % N == _readPos; }
-	T& writeRef() { return _data[_writePos]; }
-	void push() { _writePos = (_writePos + 1) % N; }
-
-	bool empty() const { return _readPos == _writePos; }
-	const T& readRef() const { return _data[_readPos]; }
-	void pop() { _readPos = (_readPos + 1) % N; }
-};
-#else
-template<typename T, size_t N>
-class LockFreeFIFO {
-private:
-	T data[N];
-	std::atomic<uint8_t> _writePos = {0};
-	std::atomic<uint8_t> _readPos = {0};
-public:
-	bool full() const
-	{
-		uint8_t currentWritePos = _writePos.load(std::memory_order_relaxed);
-		uint8_t nextWritePos = (currentWritePos + 1) % N;
-		uint8_t currenReadPos = _readPos.load(std::memory_order_acquire);
-		return nextWritePos == currenReadPos;
-	}
-	T& writeRef()
-	{
-		uint8_t currentWritePos = _writePos.load(std::memory_order_relaxed);
-		return data[currentWritePos];
-	}
-	void push()
-	{
-		uint8_t currentWritePos = _writePos.load(std::memory_order_relaxed);
-		uint8_t nextWritePos = (currentWritePos + 1) % N;
-		_writePos.store(nextWritePos, std::memory_order_release);
-	}
-
-	bool empty() const
-	{
-		return _readPos.load(std::memory_order_relaxed) == _writePos.load(std::memory_order_acquire);
-	}
-	const T& readRef() const
-	{
-		uint8_t currentReadPos = _readPos.load(std::memory_order_relaxed);
-		return data[currentReadPos];
-	}
-	void pop()
-	{
-		uint8_t currentReadPos = _readPos.load(std::memory_order_relaxed);
-		uint8_t nextReadPos = (currentReadPos + 1) % N;
-		_readPos.store(nextReadPos, std::memory_order_release);
-	}
-};
-
-// Input polling and task scheduling
-class InterruptScheduler : public Scheduler
-{
-private:
-	struct InputData
-	{
-		uint16_t micros;
-		uint8_t pin;
-		uint8_t state;
-	};
-
-	LockFreeFIFO<InputData, INS_INPUT_FIFO_LENGTH> _inputFIFO;
-	static InterruptScheduler *s_this;
-public:
-	InterruptScheduler() { s_this = this; }
-
-	bool add(SteppedTask *task, Delegate *delegate = nullptr) { return Scheduler::add(task, delegate); }
-
-	bool add(Decoder *decoder, uint8_t pin)
-	{
-		bool retval = Scheduler::add(decoder, pin);
-		for (int p = 0; p < _maxPin; ++p)
-		{
-			if (pin != _pins_pin[p])
-				continue;
-#ifdef UNIT_TEST
-			attachInterrupt(pin, pinISR, 0);
-#else
-			attachInterrupt(digitalPinToInterrupt(pin), pinISR, CHANGE);
-#endif
-			break;
-		}
-		return retval;
-	}
-
-	bool remove(Decoder *decoder)
-	{
-		for (int i = 0; i < _maxInput; ++i)
-		{
-			if (_inputs_decoder[i] != decoder)
-				continue;
-			pin_usage_t mask = 1 << i;
-			for (int p = 0; p < _maxPin; ++p)
-			{
-				if (!(_pins_usage[p] & mask))
-					continue;
-#ifdef UNIT_TEST
-				detachInterrupt(_pins_pin[p]);
-#else
-				detachInterrupt(digitalPinToInterrupt(_pins_pin[p]));
-#endif
-				break;
-			}
-			break;
-		}
-		return Scheduler::remove(decoder);
-	}
-
-	void poll()
-	{
-		pollTasks();
-		pollInputFIFOs();
-		pollTimeouts();
-	}
-
-private:
-	void pollInputFIFOs()
-	{
-		while (!_inputFIFO.empty())
-		{
-			uint16_t now = _inputFIFO.readRef().micros;
-			uint8_t pin = _inputFIFO.readRef().pin;
-			uint8_t newPinState = _inputFIFO.readRef().state;
-			_inputFIFO.pop();
-
-			for (int p = 0; p < _maxPin; ++p)
-			{
-				if (pin != _pins_pin[p] || !_pins_usage[p])
-					continue;
-				_pins_pinState[p] = newPinState;
-				pin_usage_t usageLeft = _pins_usage[p];
-				for (int i = 0; usageLeft && i < _maxInput; ++i)
-				{
-					pin_usage_t mask = 1 << i;
-					if (!(_pins_usage[p] & mask))
-						continue;
-					usageLeft &= ~mask;
-
-					if (newPinState == reportedPinState(_inputs_pinState[i]))
-					{
-						continue;
-					}
-					uint16_t timeToReport = now -_inputs_lastTransitionMicros[i];
-					if (timeoutPinState(_inputs_pinState[i]))
-					{
-						timeToReport = 0;
-					}
-					else if (timeToReport == 0)
-					{
-						timeToReport = 1;
-					}
-					uint16_t delta = _inputs_decoder[i]->Decoder_pulse(reportedPinState(_inputs_pinState[i]), timeToReport);
-					_inputs_pinState[i] = newPinState; // Resets timeout state
-					_inputs_nextTimeoutMicros[i] = now + delta;
-					_inputs_lastTransitionMicros[i] = now;
-				}
-			}
-		}
-	}
-
-	void INS_IRAM_ATTR pollInputsISR()
-	{
-		for (int p = 0; p < _maxPin; ++p)
-		{
-			if (!_pins_usage[p])
-				continue;
-			uint8_t oldPinState = _pins_pinState[p];
-			uint8_t newPinState = digitalRead(_pins_pin[p]);
-			_pins_pinState[p] = newPinState;
-			if (newPinState == oldPinState)
-			{
-				continue;
-			}
-			// Pray we don't overflow.
-			_inputFIFO.writeRef().micros = fastMicros();
-			_inputFIFO.writeRef().pin = _pins_pin[p];
-			_inputFIFO.writeRef().state = newPinState;
-			_inputFIFO.push();
-			break;
-		}
-	}
-
-	static void INS_IRAM_ATTR pinISR()
-	{
-		s_this->pollInputsISR();
-	}
-};
-#endif
 
 }
 #endif
