@@ -32,6 +32,7 @@ set(COMMON_SOURCES
 	../src/Inseparates.h
 	../src/Inseparates.cpp
 	../src/FastTime.h
+	../src/PlatformTimers.h
 	../src/ProtocolUtils.h
 	../src/DebugUtils.h
 	../src/DebugUtils.cpp
