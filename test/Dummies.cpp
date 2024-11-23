@@ -65,6 +65,7 @@ int digitalRead(uint8_t pin)
 // TODO: Store only if pinmode is correct too!
 void digitalWrite(uint8_t pin, uint8_t value)
 {
+	assert(value < 2);
 	g_pinStates[pin] = value;
 	g_digitalWriteStateLog[pin].push_back(value);
 	if (g_digitalWriteTimeLog[pin].size())
