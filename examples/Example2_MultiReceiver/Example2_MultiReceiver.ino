@@ -52,15 +52,15 @@ static const uint8_t D_9  = 9;
 static const uint8_t D_10 = 10;
 #endif
 
-const uint8_t kBeo36RecvPin = D_2;
-const uint8_t kDatalink80RecvPin = D_9;
-const uint8_t kDatalink86RecvPin = D_6;
+const uint8_t kBeo36RecvPin = D_3;
+const uint8_t kDatalink80RecvPin = D_4;
+const uint8_t kDatalink86RecvPin = D_7;
 const uint8_t kESIRecvPin = D_10;
-const uint8_t kNECRecvPin = D_2;
+const uint8_t kNECRecvPin = D_3;
 const uint8_t kRC5RecvPin = D_8;
-const uint8_t kSIRCRecvPin = D_2;
+const uint8_t kSIRCRecvPin = D_3;
 const uint8_t kTechnicsSCDataPin = D_5;
-const uint8_t kTechnicsSCClockPin = D_4;
+const uint8_t kTechnicsSCClockPin = D_6;
 
 using namespace inseparates;
 

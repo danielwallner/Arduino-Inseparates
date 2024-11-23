@@ -45,7 +45,7 @@ static const uint8_t D_9  = 9;
 static const uint8_t D_10 = 10;
 #endif
 
-const uint16_t kInputPin0 = D_2;
+const uint16_t kInputPin0 = D_3;
 #if DUAL_PIN
 const uint16_t kInputPin1 = D_8;
 #endif

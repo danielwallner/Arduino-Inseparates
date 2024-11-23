@@ -14,12 +14,15 @@
 #if defined(ESP8266) // WEMOS D1 R2
 static const uint8_t D_3  = 5;
 static const uint8_t D_8  = 12;
+static const uint8_t D_9  = 13;
 #elif defined(ESP32) // WEMOS D1 R32
 static const uint8_t D_3  = 25;
 static const uint8_t D_8  = 12;
+static const uint8_t D_9  = 13;
 #else
-static const uint8_t D_3  = 3; // Use pin 3 when using HW_PWM on AVR.
+static const uint8_t D_3  = 3;
 static const uint8_t D_8  = 8;
+static const uint8_t D_9  = 9;
 #endif
 
 #if MODULATE
@@ -28,7 +31,7 @@ static const uint8_t D_8  = 8;
 #define SW_PWM 0 // This requires running two tasks in parallel, see below.
 #define ACTIVE LOW
 #define OFF_MODE INPUT_PULLUP
-const uint16_t kIRSendPin = D_3;
+const uint16_t kIRSendPin = D_9;
 #else
 // RC-5 connector compatible signal
 #define ACTIVE HIGH

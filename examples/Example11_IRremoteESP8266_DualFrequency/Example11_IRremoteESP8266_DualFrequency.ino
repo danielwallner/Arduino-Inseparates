@@ -80,7 +80,7 @@ static const uint8_t D_9  = 9;
 #endif
 
 const uint16_t kMainReceivePin = D_3;
-const uint16_t kDatalink86RecvPin = D_4;
+const uint16_t kDatalink86RecvPin = D_7;
 const uint16_t kIRSendPin = D_9;
 
 using namespace inseparates;

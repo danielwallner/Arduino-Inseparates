@@ -65,7 +65,7 @@ const uint16_t kESIPin = D_12;
 #define HAVE_SR 1
 const uint16_t kSRPin = D_7; // NEC/SIRC
 #define HAVE_DATALINK86 1
-const uint16_t kDatalink86Pin = D_10;
+const uint16_t kDatalink86Pin = D_12;
 #if !HAVE_RC5
 #define HAVE_DATALINK80 1
 const uint16_t kDatalink80Tape1Pin = D_8;

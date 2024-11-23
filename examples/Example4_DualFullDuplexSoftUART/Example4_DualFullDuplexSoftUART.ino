@@ -5,18 +5,24 @@
 #include <Arduino.h>
 
 #if defined(ESP8266) // WEMOS D1 R2
-static const uint8_t D_2  = 16;
+static const uint8_t D_2  = 16; // No interrupts
 static const uint8_t D_3  = 5;
+static const uint8_t D_4  = 4;
+static const uint8_t D_5  = 0;
 static const uint8_t D_6  = 2;
 static const uint8_t D_7  = 14;
 #elif defined(ESP32) // WEMOS D1 R32
 static const uint8_t D_2  = 26;
 static const uint8_t D_3  = 25;
+static const uint8_t D_4  = 17;
+static const uint8_t D_5  = 16;
 static const uint8_t D_6  = 27;
 static const uint8_t D_7  = 14;
 #else
 static const uint8_t D_2  = 2;
 static const uint8_t D_3  = 3;
+static const uint8_t D_4  = 4;
+static const uint8_t D_5  = 5;
 static const uint8_t D_6  = 6;
 static const uint8_t D_7  = 7;
 #endif
@@ -26,8 +32,8 @@ static const uint8_t D_7  = 7;
 #define INS_FAST_TIME 1
 #define INS_ENABLE_INPUT_FILTER 0
 #define INS_UART_FRACTIONAL_TIME 0
-#define INS_SAMPLE_DEBUG_PIN D_6
-#define INS_TIMEOUT_DEBUG_PIN D_7
+#define INS_SAMPLE_DEBUG_PIN D_4
+#define INS_TIMEOUT_DEBUG_PIN D_5
 #define DEBUG_FULL_TIMING 0
 #define DEBUG_CYCLE_TIMING 1
 #define DEBUG_DRY_TIMING 0

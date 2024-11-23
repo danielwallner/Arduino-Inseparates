@@ -56,12 +56,12 @@ static const uint8_t D_10 = 10;
 #define INPUT_PULLDOWN INPUT
 #endif
 
-const uint16_t kIRSendPin = D_3;
-const uint16_t kRC5RecvPin = D_8;
-const uint16_t kESISendPin = D_10;
-const uint16_t kESIRecvPin = D_10;
+const uint16_t kIRSendPin = D_9;
+const uint16_t kRC5RecvPin = D_7;
+const uint16_t kESISendPin = D_8;
+const uint16_t kESIRecvPin = D_8;
 const uint16_t kTechnicsSCDataPin = D_5;
-const uint16_t kTechnicsSCClockPin = D_4;
+const uint16_t kTechnicsSCClockPin = D_6;
 
 using namespace inseparates;
 

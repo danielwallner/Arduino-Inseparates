@@ -45,7 +45,7 @@ static const uint8_t D_9  = 9;
 static const uint8_t D_10 = 10;
 #endif
 
-const uint16_t kDatalink86RecvPin = D_10;
+const uint16_t kDatalink86RecvPin = D_7;
 
 using namespace inseparates;
 
