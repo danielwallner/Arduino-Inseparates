@@ -141,7 +141,7 @@ public:
     scheduler.add(&_esiDecoder, kESIRecvPin);
     scheduler.add(&_rc5Decoder, kRC5RecvPin);
     scheduler.add(&_technicsDecoder);
-#if SEND_TECHNICS_SC
+#if SEND_TECHNICS_SC && !SEND_ESI
     // TxTechnicsSC must unlike other encoders always be active.
     scheduler.add(&_txTechnicsSC);
 #endif
@@ -169,7 +169,7 @@ public:
 
   // This is where everything that you normally put in loop() goes.
   // Never use any form of delay here.
-  // Instead return the number of microseconds to sleep before the next step. 
+  // Instead return the number of microseconds to sleep before the next step.
   uint16_t SteppedTask_step() override
   {
     if (_time.microsSinceReset() > 400000L)
@@ -225,7 +225,7 @@ void setup()
   Serial.println(kESIRecvPin);
   Serial.print("RC-5 input pin: ");
   Serial.println(kRC5RecvPin);
-#if SEND_TECHNICS_SC
+#if SEND_TECHNICS_SC && !SEND_ESI
   Serial.print("Technics SC data pin: ");
   Serial.println(kTechnicsSCDataPin);
   Serial.print("Technics SC clock pin: ");
