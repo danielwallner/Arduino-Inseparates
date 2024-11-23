@@ -153,7 +153,7 @@ public:
 
 	void Decoder_timeout(uint8_t /*pinState*/) override
 	{
-		if (_count != uint8_t(-1))
+		if (_count == uint8_t(-1))
 		{
 			INS_ASSERT(0);
 			return;
