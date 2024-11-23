@@ -476,7 +476,7 @@ int main()
 		bool rc5Data[20] = { 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0  };
 		uint16_t pulseWidths[20] = { 5678, 888, 888, 1776, 888, 888, 888, 888, 1776, 1776, 1776, 888, 888, 888, 888, 1776, 1776, 1776, 1776, 888 };
 
-		for (int i = 0; i < 20; i++)
+		for (unsigned i = 0; i < 20; i++)
 		{
 			rc5Decoder.Decoder_pulse(1 ^ rc5Data[i], pulseWidths[i]);
 		}
