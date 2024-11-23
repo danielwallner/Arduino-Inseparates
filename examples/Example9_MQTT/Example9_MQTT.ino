@@ -224,7 +224,7 @@ void logLine(const String &string)
 {
   String logTopic = statusTopic + "/log";
   if (mqttClient.connected())
-    mqttClient.publish(logTopic.c_str(), string.c_str(), true);
+    mqttClient.publish(logTopic.c_str(), string.c_str(), false);
   Serial.println(string);
 }
 
