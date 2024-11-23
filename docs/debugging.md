@@ -7,7 +7,7 @@
 Debugging and developing multi-tasking systems can be challenging.<br/>
 Too make this somewhat easier it is possible to run and debug parts of this library in an IDE on host.
 
-The test code contains a "debug_system" target that can run with mockups of Arduino functionality.
+The test code contains "debug_*" targets that can run with mockups of Arduino functionality.
 
 To setup debugging on MacOS:
 
@@ -19,7 +19,7 @@ cmake -GXcode ..
 open InseparatesTest.xcodeproj
 ```
 
-Then run the debug_system target.
+Then run one of the debug_* targets.
 
 ## Running Tests
 

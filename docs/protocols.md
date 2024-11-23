@@ -161,7 +161,7 @@ The schematics below are bidirectional even if it doesn't look like that. A bipo
 ![Active Low](images/ActiveLow.png)
 
 ### Active High Protocols
-For some unfathomable reason some wired protocols are active high, most notably Philips RC5 and ESI. On these mark is driven high and space is pull-down.<br/>
+For some unfathomable reason some wired protocols are active high. Most notably Philips RC5 and ESI. On these mark is driven high and space is pull-down.<br/>
  Some Philips engineer apparently decided that it was a good ide to have a protocol that effectively connects the 5V supplies of equipments when they happen to send simultaneously.<br/>
 As with the active low protocols the adventurous can connect these protocols directly to an _active high_ open-drain MCU pin. But this is even less recommended as an active transmission will try to supply the MCU through the pin protection diodes (depending on how this protection is implemented).<br/>
 
@@ -169,7 +169,9 @@ The standard hardware used in Philips equipment uses two transistors and two MCU
 
 BAT85 gives a bit more margin than 1N4148 if the MCU isn't 5V.
 
-**Minimum safeish hardware**: You can get away with this if you only have a single connection and no ground loops.
+Note that if this is connected to a pin of an MCU with a lower than 5V supply there is a high impedance path that elevates the connected pin above the supply voltage during transmissions. But it would require an exceedingly sensitive device to be harmed by this.
+
+**Minimum safeish hardware**: You can get away with this if you only have a single connection and no ground loops (and either have a pin with internal pull-down or don't care about floating inputs).
 
 ![Active High Minimal](images/ActiveHighMin.png)
 

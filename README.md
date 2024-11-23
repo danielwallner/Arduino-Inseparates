@@ -12,7 +12,7 @@ Inseparates is though not focused on IR protocols and the above libraries can be
 * IR to interconnect protocol translation.
 * Enable extended functionality not available on IR protocols.
 * Home automation integration.
-* Replace wires with MQTT.
+* Wireless IR/wired message forwarding.
 * DIY preamps/controllers.
 
 ## Features
@@ -21,7 +21,18 @@ Inseparates is though not focused on IR protocols and the above libraries can be
 - **Multi Pin Protocol Support**: The protocols runs as independent tasks and can support multiple pin protocols like Technics System Control.
 - **Device Support**: AVR, SAMD, ESP8266/ESP32.
 
+The recommended device is ESP32, all other devices have limitations (or known bugs).<br/>
+ESP8266 only has one free timer, which can cause issues with other libraries.<br/>
+AVR and SAMD can currently only be used in polling mode.<br/>
+SAMD lacks hardware PWM implementation and tone() is useless on this platform.
+
 The task based model is more resource-demanding than typical IR libraries and only a simple setups can run on AVR microcontrollers.
+
+This shows output from the MQTT example where wired RC5, ESI and Sony signals were driven concurrently with an IRremoteESP8266 IR transmission:
+![Active Low](docs/images/MQTT.png)
+The receivers were also active during this and mirrored the messages back to MQTT.
+
+The blocking nature of IRremoteESP8266 send limits concurrency somewhat and concurrent interrupt based reception cannot currently be combined with IRremoteESP8266 receive.
 
 ## Supported Protocols
 
@@ -117,6 +128,8 @@ Makes it possible to control your audio system from your home automation or by c
 Uses IRremoteESP8266 for extensive IR protocol support.<br/>
 Partially compatible with OpenMQTTGateway's regular JSON message structure.<br/>
 Supports enumeration and addressing so that you can have multiple clients around the house e.g. one in front of your equipment for IR and one behind for wired interconnects.
+
+As the MQTT topics are configured now it is intended for using with e.g. a web application but by modifying the topics on different devices this example can be modified to forward messages without the need for anyting more than the MQTT server.
 
 ### RC5 Hairpin
 
