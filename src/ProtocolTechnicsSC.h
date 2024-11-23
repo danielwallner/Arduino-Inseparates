@@ -63,6 +63,8 @@
 namespace inseparates
 {
 
+// It would be more reliable and safer if these supported input interrupts but that requires changes to Scheduler.
+
 // This transmitter is unusual because it needs to read the output pins and must run continuously to sync with other masters.
 // The simple handshake implemented here may not work under severe load.
 class TxTechnicsSC : public SteppedTask

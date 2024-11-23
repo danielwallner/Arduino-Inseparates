@@ -70,7 +70,7 @@ public:
 
 	void write(uint8_t value) override
 	{
-		if ( _offMode == OUTPUT)
+		if (_offMode == OUTPUT)
 		{
 			digitalWrite(_pin, value);
 		}
@@ -203,8 +203,9 @@ public:
 			}
 #endif
 #else
-			// This fallback may not work as some platforms limit the frequency to 20 kHz.
-			// Also, tone does not support duty cycle.
+			// This fallback may not work as some platforms limit the frequency to 20 kHz or even lower (or break completely when too high).
+			// SAMD tone() is scary buggy and does not work above 10 kHz! (It can even hang!)
+			// Also, tone() does not support duty cycle.
 			tone(_pin, _frequency);
 #endif
 		}
