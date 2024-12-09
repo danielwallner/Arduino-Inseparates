@@ -66,16 +66,19 @@
 static const uint8_t D_2  = 16;
 static const uint8_t D_3  = 5;
 static const uint8_t D_4  = 4;
+static const uint8_t D_7  = 14;
 static const uint8_t D_9  = 13;
 #elif defined(ESP32) // WEMOS D1 R32
 static const uint8_t D_2  = 26;
 static const uint8_t D_3  = 25;
 static const uint8_t D_4  = 17;
+static const uint8_t D_7  = 14;
 static const uint8_t D_9  = 13;
 #else
 static const uint8_t D_2  = 2;
 static const uint8_t D_3  = 3;
 static const uint8_t D_4  = 4;
+static const uint8_t D_7  = 7;
 static const uint8_t D_9  = 9;
 #endif
 
