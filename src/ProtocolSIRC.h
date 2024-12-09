@@ -94,7 +94,7 @@ public:
 	class Delegate
 	{
 	public:
-		virtual void RxSIRCDelegate_data(uint32_t data, uint8_t bits) = 0;
+		virtual void RxSIRCDelegate_data(uint32_t data, uint8_t bits, uint8_t bus) = 0;
 	};
 
 private:
@@ -109,15 +109,12 @@ private:
 	uint8_t _mark;
 	Delegate *_delegate;
 	uint32_t _data;
-	uint8_t _maxBits;
+	uint8_t _bus;
 	uint8_t _count;
 
 public:
-	// If messages are less than 20 bits it is impossible to know if the message is complete when the last bit is received!
-	// You need to specify number of bits or poll by running step to trigger receive callback!
-	// Otherwise 12-bit or 15-bit messages will not be received!
-	RxSIRC(uint8_t mark, Delegate *delegate, uint8_t maxBits = 20) :
-		_mark(mark), _delegate(delegate), _maxBits(maxBits)
+	RxSIRC(uint8_t mark, Delegate *delegate, uint8_t bus = 0) :
+		_mark(mark), _delegate(delegate), _bus(bus)
 	{
 		reset();
 	}
@@ -139,7 +136,7 @@ public:
 		if (pinState != _mark)
 		{
 			if (_delegate)
-				_delegate->RxSIRCDelegate_data(_data, _count >> 1);
+				_delegate->RxSIRCDelegate_data(_data, _count >> 1, _bus);
 		}
 		reset();
 	}
@@ -193,13 +190,6 @@ public:
 			return Decoder::kInvalidTimeout;
 		}
 
-		if (mark && _count >= (_maxBits << 1))
-		{
-			if (_delegate)
-				_delegate->RxSIRCDelegate_data(_data, _count >> 1);
-			reset();
-			return Decoder::kInvalidTimeout;
-		}
 		return kTimeout;
 	}
 

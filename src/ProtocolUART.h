@@ -31,12 +31,6 @@ enum Parity {
 class TxUART : public SteppedTask
 {
 	friend class RxUART;
-public:
-	class Delegate
-	{
-	public:
-		virtual void TxUARTDelegate_timingError() = 0;
-	};
 
 private:
 #if INS_UART_FRACTIONAL_TIME
@@ -201,9 +195,9 @@ public:
 	class Delegate
 	{
 	public:
-		virtual void RxUARTDelegate_data(uint8_t data) = 0;
-		virtual void RxUARTDelegate_timingError() = 0;
-		virtual void RxUARTDelegate_parityError() = 0;
+		virtual void RxUARTDelegate_data(uint8_t data, uint8_t bus) = 0;
+		virtual void RxUARTDelegate_timingError(uint8_t bus) = 0;
+		virtual void RxUARTDelegate_parityError(uint8_t bus) = 0;
 	};
 
 private:
@@ -220,13 +214,14 @@ private:
 	Delegate *_delegate;
 	Parity _parity;
 	uint8_t _bits;
+	uint8_t _bus;
 	uint8_t _parityValue;
 	uint8_t _count;
 public:
 	// The main receive function is driven by input changes.
 	// You need to run SteppedTask_step() to get the last byte from a stream of bytes!
-	RxUART(uint8_t mark, Delegate *delegate) :
-		_mark(mark), _delegate(delegate), _parity(Parity::kNone), _bits(8)
+	RxUART(uint8_t mark, Delegate *delegate, uint8_t bus = 0) :
+		_mark(mark), _delegate(delegate), _parity(Parity::kNone), _bits(8), _bus(bus)
 	{
 		reset();
 	}
@@ -266,7 +261,7 @@ public:
 		{
 			INS_DEBUGF("timeout %hhd %hhX\n", pinState, _data);
 			if (_delegate)
-				_delegate->RxUARTDelegate_timingError();
+				_delegate->RxUARTDelegate_timingError(_bus);
 		}
 
 		for (;;)
@@ -284,7 +279,7 @@ public:
 				// Stop
 				if (_delegate)
 				{
-					_delegate->RxUARTDelegate_data(_data);
+					_delegate->RxUARTDelegate_data(_data, _bus);
 				}
 				reset();
 				return;
@@ -297,7 +292,7 @@ public:
 			if (_count == _bits + 2 && (_parity == kEven ? 0 : 1) != _parityValue)
 			{
 				if (_delegate)
-					_delegate->RxUARTDelegate_parityError();
+					_delegate->RxUARTDelegate_parityError(_bus);
 				reset();
 				return;
 			}
@@ -357,7 +352,7 @@ public:
 					// Less than three quarter bits but more than a quarter bit left
 					INS_DEBUGF("%hhd %d %hhd %d\n", pulseState, (int)pulseWidth, _count, (int)distanceToNextBitBoundry);
 					if (_delegate)
-						_delegate->RxUARTDelegate_timingError();
+						_delegate->RxUARTDelegate_timingError(_bus);
 					reset();
 					return kInvalidTimeout;
 				}
@@ -367,7 +362,7 @@ public:
 				}
 				INS_DEBUGF("%hhd %d %hhd %d\n", pulseState, (int)pulseWidth, _count, (int)distanceToNextBitBoundry);
 				if (_delegate)
-					_delegate->RxUARTDelegate_timingError();
+					_delegate->RxUARTDelegate_timingError(_bus);
 				reset();
 				return kInvalidTimeout;
 			}
@@ -395,11 +390,11 @@ public:
 				if (!mark)
 				{
 					INS_DEBUGF("%hhd %d %hhd\n", pulseState, (int)pulseWidth, _count);
-					_delegate->RxUARTDelegate_timingError();
+					_delegate->RxUARTDelegate_timingError(_bus);
 				}
 				else if (_delegate)
 				{
-					_delegate->RxUARTDelegate_data(_data);
+					_delegate->RxUARTDelegate_data(_data, _bus);
 				}
 				_count = -1;
 				return kInvalidTimeout;
@@ -415,7 +410,7 @@ public:
 			{
 				INS_DEBUGF("%hhX %hhd\n", _data, _parityValue);
 				if (_delegate)
-					_delegate->RxUARTDelegate_parityError();
+					_delegate->RxUARTDelegate_parityError(_bus);
 				_count = -1;
 				return kInvalidTimeout;
 			}

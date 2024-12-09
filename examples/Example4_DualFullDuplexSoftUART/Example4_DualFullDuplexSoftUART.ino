@@ -124,7 +124,7 @@ public:
     SchedulerDelegate_done(nullptr);
   }
 
-  void RxUARTDelegate_data(uint8_t data) override
+  void RxUARTDelegate_data(uint8_t data, uint8_t bus) override
   {
     if (data == 0xFF)
     {
@@ -139,13 +139,13 @@ public:
     ++_receiveData;
   }
 
-  void RxUARTDelegate_timingError() override
+  void RxUARTDelegate_timingError(uint8_t bus) override
   {
     printer.printf("Timing Error at: %hhu\n", _sendData);
     scheduler.remove(&_rx);
   }
 
-  void RxUARTDelegate_parityError() override
+  void RxUARTDelegate_parityError(uint8_t bus) override
   {
     printer.printf("Parity Error at: %hhu\n", _sendData);
     scheduler.remove(&_rx);

@@ -109,7 +109,7 @@ public:
 	class Delegate
 	{
 	public:
-		virtual void RxRC5Delegate_data(uint16_t data) = 0;
+		virtual void RxRC5Delegate_data(uint16_t data, uint8_t bus) = 0;
 	};
 
 private:
@@ -118,11 +118,12 @@ private:
 	uint8_t _mark;
 	Delegate *_delegate;
 	uint16_t _data;
+	uint8_t _bus;
 	uint8_t _count;
 
 public:
-	RxRC5(uint8_t mark, Delegate *delegate) :
-		_mark(mark), _delegate(delegate)
+	RxRC5(uint8_t mark, Delegate *delegate, uint8_t bus = 0) :
+		_mark(mark), _delegate(delegate), _bus(bus)
 	{
 		reset();
 	}
@@ -183,7 +184,7 @@ public:
 		if (mark && _count >= 26)
 		{
 			if (_delegate)
-				_delegate->RxRC5Delegate_data(_data);
+				_delegate->RxRC5Delegate_data(_data, _bus);
 			_count = -1;
 			return Decoder::kInvalidTimeout;
 		}

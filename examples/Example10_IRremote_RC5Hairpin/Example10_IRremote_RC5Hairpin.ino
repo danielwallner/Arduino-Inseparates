@@ -193,7 +193,7 @@ public:
   }
 
 #if !USE_IRREMOTE
-  void RxNECDelegate_data(uint32_t data) override
+  void RxNECDelegate_data(uint32_t data, uint8_t bus) override
   {
     uint8_t address = data;
     uint8_t command = data >> 16;

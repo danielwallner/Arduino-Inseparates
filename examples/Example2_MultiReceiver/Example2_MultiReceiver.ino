@@ -97,7 +97,7 @@ class Delegate :
   public RxTechnicsSC::Delegate
 {
 public:
-  void RxBeo36Delegate_data(uint8_t data) override
+  void RxBeo36Delegate_data(uint8_t data, uint8_t bus) override
   {
     // Printing here is not ideal.
     // Only do this for debugging and know it will affect the timing of tasks!
@@ -130,24 +130,24 @@ public:
     printer.println(String(bits));
   }
 
-  void RxESIDelegate_data(uint64_t data, uint8_t bits) override
+  void RxESIDelegate_data(uint64_t data, uint8_t bits, uint8_t bus) override
   {
     printer.printf("ESI data: %0lx%0lx bits: %hhu\n", uint32_t(data >> 32),  uint32_t(data), bits);
   }
 
-  void RxNECDelegate_data(uint32_t data) override
+  void RxNECDelegate_data(uint32_t data, uint8_t bus) override
   {
     printer.print("NEC: ");
     printer.println(String(data, HEX));
   }
 
-  void RxRC5Delegate_data(uint16_t data) override
+  void RxRC5Delegate_data(uint16_t data, uint8_t bus) override
   {
     printer.print("RC5: ");
     printer.println(String(data, HEX));
   }
 
-  void RxSIRCDelegate_data(uint32_t data, uint8_t bits) override
+  void RxSIRCDelegate_data(uint32_t data, uint8_t bits, uint8_t bus) override
   {
     printer.print("SIRC: ");
     printer.print(String(data, HEX));

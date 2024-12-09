@@ -68,21 +68,25 @@ TEST(RxTest, NEC)
 	class Delegate : public RxNEC::Delegate
 	{
 		uint32_t &receivedData;
+		uint8_t &receivedBus;
 	public:
-		Delegate(uint32_t &receivedData_) : receivedData(receivedData_) {}
+		Delegate(uint32_t &receivedData_, uint8_t &receivedBus_) : receivedData(receivedData_), receivedBus(receivedBus_) {}
 
-		void RxNECDelegate_data(uint32_t data) override
+		void RxNECDelegate_data(uint32_t data, uint8_t bus) override
 		{
 			receivedData = data;
+			receivedBus = bus;
 		}
 	};
 
 	uint32_t receivedData;
+	uint8_t receivedBus;
 	uint8_t pin = 6;
+	uint8_t bus = 2;
 
-	Delegate delegate(receivedData);
+	Delegate delegate(receivedData, receivedBus);
 
-	RxNEC necDecoder(HIGH, &delegate);
+	RxNEC necDecoder(HIGH, &delegate, bus);
 
 	uint16_t startDelay = 14321;
 	uint32_t data = 0x80000001;
@@ -98,6 +102,7 @@ TEST(RxTest, NEC)
 		necDecoder.Decoder_pulse(1 ^ g_digitalWriteStateLog[pin][i], g_digitalWriteTimeLog[pin][i]);
 	}
 	EXPECT_EQ(data, receivedData);
+	EXPECT_EQ(bus, receivedBus);
 
 	data = 0x7000000F;
 	resetLogs();
@@ -110,6 +115,7 @@ TEST(RxTest, NEC)
 		necDecoder.Decoder_pulse(1 ^ g_digitalWriteStateLog[pin][i], g_digitalWriteTimeLog[pin][i]);
 	}
 	EXPECT_EQ(data, receivedData);
+	EXPECT_EQ(bus, receivedBus);
 
 	data = 0x3FFF;
 	resetLogs();
@@ -122,6 +128,7 @@ TEST(RxTest, NEC)
 		necDecoder.Decoder_pulse(1 ^ g_digitalWriteStateLog[pin][i], g_digitalWriteTimeLog[pin][i]);
 	}
 	EXPECT_EQ(data, receivedData);
+	EXPECT_EQ(bus, receivedBus);
 
 	data = 0x355A;
 	resetLogs();
@@ -134,4 +141,5 @@ TEST(RxTest, NEC)
 		necDecoder.Decoder_pulse(1 ^ g_digitalWriteStateLog[pin][i], g_digitalWriteTimeLog[pin][i]);
 	}
 	EXPECT_EQ(data, receivedData);
+	EXPECT_EQ(bus, receivedBus);
 }

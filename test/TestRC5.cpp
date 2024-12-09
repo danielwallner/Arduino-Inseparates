@@ -70,21 +70,25 @@ TEST(RxTest, RC5)
 	class Delegate : public RxRC5::Delegate
 	{
 		uint16_t &receivedData;
+		uint8_t &receivedBus;
 	public:
-		Delegate(uint16_t &receivedData_) : receivedData(receivedData_) {}
+		Delegate(uint16_t &receivedData_, uint8_t &receivedBus_) : receivedData(receivedData_), receivedBus(receivedBus_) {}
 
-		void RxRC5Delegate_data(uint16_t data) override
+		void RxRC5Delegate_data(uint16_t data, uint8_t bus) override
 		{
 			receivedData = data;
+			receivedBus = bus;
 		}
 	};
 
 	uint16_t receivedData;
+	uint8_t receivedBus;
 	uint8_t pin = 6;
+	uint8_t bus = 3;
 
-	Delegate delegate(receivedData);
+	Delegate delegate(receivedData, receivedBus);
 
-	RxRC5 rc5Decoder(HIGH, &delegate);
+	RxRC5 rc5Decoder(HIGH, &delegate, bus);
 
 	uint16_t startDelay = 4321;
 	uint16_t data = 0x2000;
@@ -100,6 +104,7 @@ TEST(RxTest, RC5)
 		rc5Decoder.Decoder_pulse(1 ^ g_digitalWriteStateLog[pin][i], g_digitalWriteTimeLog[pin][i]);
 	}
 	EXPECT_EQ(data, receivedData);
+	EXPECT_EQ(bus, receivedBus);
 
 	data = 0x3011;
 	resetLogs();
@@ -112,6 +117,7 @@ TEST(RxTest, RC5)
 		rc5Decoder.Decoder_pulse(1 ^ g_digitalWriteStateLog[pin][i], g_digitalWriteTimeLog[pin][i]);
 	}
 	EXPECT_EQ(data, receivedData);
+	EXPECT_EQ(bus, receivedBus);
 
 	data = 0x3FFF;
 	resetLogs();
@@ -124,6 +130,7 @@ TEST(RxTest, RC5)
 		rc5Decoder.Decoder_pulse(1 ^ g_digitalWriteStateLog[pin][i], g_digitalWriteTimeLog[pin][i]);
 	}
 	EXPECT_EQ(data, receivedData);
+	EXPECT_EQ(bus, receivedBus);
 
 	data = 0x355A;
 	resetLogs();
@@ -136,4 +143,5 @@ TEST(RxTest, RC5)
 		rc5Decoder.Decoder_pulse(1 ^ g_digitalWriteStateLog[pin][i], g_digitalWriteTimeLog[pin][i]);
 	}
 	EXPECT_EQ(data, receivedData);
+	EXPECT_EQ(bus, receivedBus);
 }

@@ -83,19 +83,20 @@ public:
 	class Delegate
 	{
 	public:
-		virtual void RxBeo36Delegate_data(uint8_t data) = 0;
+		virtual void RxBeo36Delegate_data(uint8_t data, uint8_t bus) = 0;
 	};
 
 private:
 	uint8_t _mark;
 	Delegate *_delegate;
+	uint8_t _bus;
 	uint8_t _lastBit;
 	uint8_t _data;
 	uint8_t _count;
 
 public:
-	RxBeo36(uint8_t mark, Delegate *delegate) :
-		_mark(mark), _delegate(delegate)
+	RxBeo36(uint8_t mark, Delegate *delegate, uint8_t bus = 0) :
+		_mark(mark), _delegate(delegate), _bus(bus)
 	{
 		reset();
 	}
@@ -138,7 +139,7 @@ public:
 			if (_count == 15)
 			{
 				if (_delegate)
-					_delegate->RxBeo36Delegate_data(_data >> 1);
+					_delegate->RxBeo36Delegate_data(_data >> 1, _bus);
 				reset();
 				return Decoder::kInvalidTimeout;
 			}

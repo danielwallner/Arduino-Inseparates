@@ -68,23 +68,27 @@ TEST(RxTest, SIRC)
 	{
 		uint32_t &receivedData;
 		uint8_t &receivedBits;
+		uint8_t &receivedBus;
 	public:
-		Delegate(uint32_t &receivedData_, uint8_t &receivedBits_) : receivedData(receivedData_), receivedBits(receivedBits_) {}
+		Delegate(uint32_t &receivedData_, uint8_t &receivedBits_, uint8_t &receivedBus_) : receivedData(receivedData_), receivedBits(receivedBits_), receivedBus(receivedBus_) {}
 
-		void RxSIRCDelegate_data(uint32_t data, uint8_t bits) override
+		void RxSIRCDelegate_data(uint32_t data, uint8_t bits, uint8_t bus) override
 		{
 			receivedData = data;
 			receivedBits = bits;
+			receivedBus = bus;
 		}
 	};
 
 	uint32_t receivedData;
 	uint8_t receivedBits;
+	uint8_t receivedBus;
 	uint8_t pin = 6;
+	uint8_t bus = 4;
 
-	Delegate delegate(receivedData, receivedBits);
+	Delegate delegate(receivedData, receivedBits, receivedBus);
 
-	RxSIRC sircDecoder(HIGH, &delegate);
+	RxSIRC sircDecoder(HIGH, &delegate, bus);
 
 	uint16_t startDelay = 4321;
 	uint32_t data = 0x80001;
@@ -99,8 +103,10 @@ TEST(RxTest, SIRC)
 	{
 		sircDecoder.Decoder_pulse(1 ^ g_digitalWriteStateLog[pin][i], g_digitalWriteTimeLog[pin][i]);
 	}
+	sircDecoder.Decoder_timeout(g_digitalWriteStateLog[pin].back());
 	EXPECT_EQ(data, receivedData);
 	EXPECT_EQ(20, receivedBits);
+	EXPECT_EQ(bus, receivedBus);
 
 	data = 0x7000F;
 	resetLogs();
@@ -112,8 +118,10 @@ TEST(RxTest, SIRC)
 	{
 		sircDecoder.Decoder_pulse(1 ^ g_digitalWriteStateLog[pin][i], g_digitalWriteTimeLog[pin][i]);
 	}
+	sircDecoder.Decoder_timeout(g_digitalWriteStateLog[pin].back());
 	EXPECT_EQ(data, receivedData);
 	EXPECT_EQ(20, receivedBits);
+	EXPECT_EQ(bus, receivedBus);
 
 	data = 0x3FFF;
 	resetLogs();
@@ -125,8 +133,10 @@ TEST(RxTest, SIRC)
 	{
 		sircDecoder.Decoder_pulse(1 ^ g_digitalWriteStateLog[pin][i], g_digitalWriteTimeLog[pin][i]);
 	}
+	sircDecoder.Decoder_timeout(g_digitalWriteStateLog[pin].back());
 	EXPECT_EQ(data, receivedData);
 	EXPECT_EQ(20, receivedBits);
+	EXPECT_EQ(bus, receivedBus);
 
 	data = 0x355A;
 	resetLogs();
@@ -138,6 +148,8 @@ TEST(RxTest, SIRC)
 	{
 		sircDecoder.Decoder_pulse(1 ^ g_digitalWriteStateLog[pin][i], g_digitalWriteTimeLog[pin][i]);
 	}
+	sircDecoder.Decoder_timeout(g_digitalWriteStateLog[pin].back());
 	EXPECT_EQ(data, receivedData);
 	EXPECT_EQ(20, receivedBits);
+	EXPECT_EQ(bus, receivedBus);
 }

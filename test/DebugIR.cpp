@@ -25,11 +25,13 @@ int main()
 		{
 		public:
 			uint8_t receivedData = 0;
+			uint8_t receivedBus = 0;
 			uint32_t dataDelay = 0;
 
-			void RxBeo36Delegate_data(uint8_t data) override
+			void RxBeo36Delegate_data(uint8_t data, uint8_t bus) override
 			{
 				receivedData = data;
+				receivedBus = bus;
 				dataDelay = totalDelay();
 			}
 		};
@@ -287,12 +289,14 @@ int main()
 		public:
 			uint64_t receivedData = 0;
 			uint8_t receivedBits = 0;
+			uint8_t receivedBus = 0;
 			uint32_t dataDelay = 0;
 
-			void RxESIDelegate_data(uint64_t data, uint8_t bits) override
+			void RxESIDelegate_data(uint64_t data, uint8_t bits, uint8_t bus) override
 			{
 				receivedData = data;
 				receivedBits = bits;
+				receivedBus = bus;
 				dataDelay = totalDelay();
 			}
 		};
@@ -374,11 +378,13 @@ int main()
 		{
 		public:
 			uint32_t receivedData = 0;
+			uint8_t receivedBus = 0;
 			uint32_t dataDelay = 0;
 
-			void RxNECDelegate_data(uint32_t data) override
+			void RxNECDelegate_data(uint32_t data, uint8_t bus) override
 			{
 				receivedData = data;
+				receivedBus = bus;
 				dataDelay = totalDelay();
 			}
 		};
@@ -456,11 +462,13 @@ int main()
 		{
 		public:
 			uint16_t receivedData = 0;
+			uint8_t receivedBus = 0;
 			uint32_t dataDelay = 0;
 
-			void RxRC5Delegate_data(uint16_t data) override
+			void RxRC5Delegate_data(uint16_t data, uint8_t bus) override
 			{
 				receivedData = data;
+				receivedBus = bus;
 				dataDelay = totalDelay();
 			}
 		};
@@ -549,12 +557,14 @@ int main()
 		public:
 			uint32_t receivedData = 0;
 			uint8_t receivedBits = 0;
+			uint8_t receivedBus = 0;
 			uint32_t dataDelay = 0;
 
-			void RxSIRCDelegate_data(uint32_t data, uint8_t bits) override
+			void RxSIRCDelegate_data(uint32_t data, uint8_t bits, uint8_t bus) override
 			{
 				receivedData = data;
 				receivedBits = bits;
+				receivedBus = bus;
 				dataDelay = totalDelay();
 			}
 		};
@@ -583,6 +593,7 @@ int main()
 			}
 			sircDecoder.Decoder_pulse(1 ^ g_digitalWriteStateLog[pin][i], g_digitalWriteTimeLog[pin][i]);
 		}
+		sircDecoder.Decoder_timeout(g_digitalWriteStateLog[pin].back());
 		assert(delegate.receivedData == data);
 		assert(delegate.receivedBits == 20);
 
@@ -611,6 +622,7 @@ int main()
 		{
 			sircDecoder.Decoder_pulse(1 ^ g_digitalWriteStateLog[pin][i], g_digitalWriteTimeLog[pin][i]);
 		}
+		sircDecoder.Decoder_timeout(g_digitalWriteStateLog[pin].back());
 		assert(delegate.receivedData == data);
 		assert(delegate.receivedBits == 20);
 
@@ -624,6 +636,7 @@ int main()
 		{
 			sircDecoder.Decoder_pulse(1 ^ g_digitalWriteStateLog[pin][i], g_digitalWriteTimeLog[pin][i]);
 		}
+		sircDecoder.Decoder_timeout(g_digitalWriteStateLog[pin].back());
 		assert(delegate.receivedData == data);
 		assert(delegate.receivedBits == 20);
 	}

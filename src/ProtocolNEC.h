@@ -113,7 +113,7 @@ public:
 	class Delegate
 	{
 	public:
-		virtual void RxNECDelegate_data(uint32_t data) = 0;
+		virtual void RxNECDelegate_data(uint32_t data, uint8_t bus) = 0;
 	};
 
 private:
@@ -132,12 +132,13 @@ private:
 	Delegate *_delegate;
 	uint32_t _data;
 	uint16_t _markLength;
+	uint8_t _bus;
 	uint8_t _count;
 	bool _repeat;
 
 public:
-	RxNEC(uint8_t mark, Delegate *delegate) :
-		_mark(mark), _delegate(delegate)
+	RxNEC(uint8_t mark, Delegate *delegate, uint8_t bus = 0) :
+		_mark(mark), _delegate(delegate), _bus(bus)
 	{
 		reset();
 	}
@@ -162,7 +163,7 @@ public:
 		if (pinState != _mark)
 		{
 			if (_repeat)
-				_delegate->RxNECDelegate_data(0);
+				_delegate->RxNECDelegate_data(0, _bus);
 		}
 		reset();
 	}
@@ -216,7 +217,7 @@ public:
 			if (_count >= 65)
 			{
 				if (_delegate)
-					_delegate->RxNECDelegate_data(_data);
+					_delegate->RxNECDelegate_data(_data, _bus);
 				reset();
 				return Decoder::kInvalidTimeout;
 			}

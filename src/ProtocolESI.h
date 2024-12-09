@@ -162,20 +162,21 @@ public:
 	class Delegate
 	{
 	public:
-		virtual void RxESIDelegate_data(uint64_t data, uint8_t bits) = 0;
+		virtual void RxESIDelegate_data(uint64_t data, uint8_t bits, uint8_t bus) = 0;
 	};
 
 private:
 	uint8_t _mark;
 	Delegate *_delegate;
 	uint64_t _data;
+	uint8_t _bus;
 	bool _toggled;
 	bool _current;
 	uint8_t _count;
 
 public:
-	RxESI(uint8_t mark, Delegate *delegate) :
-		_mark(mark), _delegate(delegate)
+	RxESI(uint8_t mark, Delegate *delegate, uint8_t bus = 0) :
+		_mark(mark), _delegate(delegate), _bus(bus)
 	{
 		reset();
 	}
@@ -199,7 +200,7 @@ public:
 		if (pinState != _mark)
 		{
 			if (_delegate)
-				_delegate->RxESIDelegate_data(_data, _count >> 1);
+				_delegate->RxESIDelegate_data(_data, _count >> 1, _bus);
 		}
 		reset();
 	}

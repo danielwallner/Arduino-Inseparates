@@ -264,19 +264,19 @@ public:
 #endif
 #if HAVE_RC5
     _txRC5(&rc5PinWriter, HIGH),
-    _rxRC5(HIGH, this),
+    _rxRC5(HIGH, this, 1),
 #endif
 #if HAVE_ESI
     _txESI(&esiPinWriter, HIGH),
-    _rxESI(HIGH, this),
+    _rxESI(HIGH, this, 1),
 #endif
 #if HAVE_SR
     _txNEC(&srPinWriter, LOW),
-    _rxNEC(LOW, this),
+    _rxNEC(LOW, this, 1),
     _txSIRC(&srPinWriter, LOW),
-    _rxSIRC(LOW, this),
+    _rxSIRC(LOW, this, 1),
 #endif
-    _rxBeo36(LOW, this),
+    _rxBeo36(LOW, this, 0),
     _rx455(LOW, this, 0)
 #if HAVE_DATALINK86
     ,_txDatalink86(&datalink86PinWriter, LOW),
@@ -360,7 +360,7 @@ public:
   }
 
 #if HAVE_RC5
-  void RxRC5Delegate_data(uint16_t data) override
+  void RxRC5Delegate_data(uint16_t data, uint8_t bus) override
   {
     Message message;
     message.value = data;
@@ -368,13 +368,13 @@ public:
     message.protocol = RC5;
     message.repeat = 0;
     message.bits = 12; // RC5X?
-    message.bus = 1;
+    message.bus = bus;
     received(message);
   }
 #endif
 
 #if HAVE_ESI
-  void RxESIDelegate_data(uint64_t data, uint8_t bits) override
+  void RxESIDelegate_data(uint64_t data, uint8_t bits, uint8_t bus) override
   {
     Message message;
     message.value = data;
@@ -382,13 +382,13 @@ public:
     message.protocol = ESI;
     message.repeat = 0;
     message.bits = bits;
-    message.bus = 1;
+    message.bus = bus;
     received(message);
   }
 #endif
 
 #if HAVE_SR
-  void RxNECDelegate_data(uint32_t data) override
+  void RxNECDelegate_data(uint32_t data, uint8_t bus) override
   {
     Message message;
     message.value = data;
@@ -396,11 +396,11 @@ public:
     message.protocol = NEC;
     message.repeat = 0;
     message.bits = 32;
-    message.bus = 1;
+    message.bus = bus;
     received(message);
   }
 
-  void RxSIRCDelegate_data(uint32_t data, uint8_t bits) override
+  void RxSIRCDelegate_data(uint32_t data, uint8_t bits, uint8_t bus) override
   {
     Message message;
     message.value = data;
@@ -408,12 +408,12 @@ public:
     message.protocol = SONY;
     message.repeat = 0;
     message.bits = bits;
-    message.bus = 1;
+    message.bus = bus;
     received(message);
   }
 #endif
 
-  void RxBeo36Delegate_data(uint8_t data) override
+  void RxBeo36Delegate_data(uint8_t data, uint8_t bus) override
   {
     Message message;
     message.value = data;
@@ -421,7 +421,7 @@ public:
     message.protocol = BEO36;
     message.repeat = 0;
     message.bits = 6;
-    message.bus = 1;
+    message.bus = bus;
     received(message);
   }
 
@@ -534,7 +534,7 @@ public:
         TxJam &_trigger = message.bus < 1 ? _trigger0 : _trigger1;
         if (scheduler.active(&_trigger))
         {
-          _sendBuffer[&_trigger].push_back(message); 
+          _sendBuffer[&_trigger].push_back(message);
           break;
         }
         _trigger.prepare(1000 * message.value);
@@ -548,7 +548,7 @@ public:
     case RC5:
       if (scheduler.active(&_txRC5))
       {
-        _sendBuffer[&_txRC5].push_back(message); 
+        _sendBuffer[&_txRC5].push_back(message);
         break;
       }
       _txRC5.prepare(message.value);
@@ -565,7 +565,7 @@ public:
     case ESI:
       if (scheduler.active(&_txESI))
       {
-        _sendBuffer[&_txESI].push_back(message); 
+        _sendBuffer[&_txESI].push_back(message);
         break;
       }
       _txESI.prepare(message.value, message.bits);
@@ -583,7 +583,7 @@ public:
     case NEC2:
       if (scheduler.active(&_txNEC))
       {
-        _sendBuffer[&_txNEC].push_back(message); 
+        _sendBuffer[&_txNEC].push_back(message);
         break;
       }
       _txNEC.prepare((repeatMessage && message.protocol == NEC) ? 0 : message.value);
@@ -598,7 +598,7 @@ public:
     case SONY:
       if (scheduler.active(&_txSIRC))
       {
-        _sendBuffer[&_txSIRC].push_back(message); 
+        _sendBuffer[&_txSIRC].push_back(message);
         break;
       }
       _txSIRC.prepare(message.value, message.bits);
@@ -636,7 +636,7 @@ public:
         TxDatalink80 &_txDatalink80 = message.bus < 2 ? _txDatalink80Tape1 : _txDatalink80Tape2;
         if (scheduler.active(&_txDatalink80))
         {
-          _sendBuffer[&_txDatalink80].push_back(message); 
+          _sendBuffer[&_txDatalink80].push_back(message);
           break;
         }
         _txDatalink80.prepare(message.value);

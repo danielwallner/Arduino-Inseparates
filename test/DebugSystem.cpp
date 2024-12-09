@@ -89,19 +89,22 @@ int main()
                 _scheduler.add(&_tx1, this);
             }
 
-            void RxUARTDelegate_data(uint8_t data) override
+            void RxUARTDelegate_data(uint8_t data, uint8_t bus) override
             {
+                assert(bus == 0);
                 receivedData.push_back(data);
                 dataDelay = totalDelay();
             }
 
-            void RxUARTDelegate_timingError() override
+            void RxUARTDelegate_timingError(uint8_t bus) override
             {
+                assert(bus == 0);
                 assert(0);
             }
 
-            void RxUARTDelegate_parityError() override
+            void RxUARTDelegate_parityError(uint8_t bus) override
             {
+                assert(bus == 0);
                 assert(0);
             }
 
@@ -175,19 +178,22 @@ int main()
                 _writeScheduler.add(&_tx1, _pin, this);
             }
 
-            void RxUARTDelegate_data(uint8_t data) override
+            void RxUARTDelegate_data(uint8_t data, uint8_t bus) override
             {
+                assert(bus == 0);
                 receivedData.push_back(data);
                 dataDelay = totalDelay();
             }
 
-            void RxUARTDelegate_timingError() override
+            void RxUARTDelegate_timingError(uint8_t bus) override
             {
+                assert(bus == 0);
                 assert(0);
             }
 
-            void RxUARTDelegate_parityError() override
+            void RxUARTDelegate_parityError(uint8_t bus) override
             {
+                assert(bus == 0);
                 assert(0);
             }
 

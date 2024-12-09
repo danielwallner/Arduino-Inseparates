@@ -55,21 +55,25 @@ TEST(RxTest, Beo36)
 	class Delegate : public RxBeo36::Delegate
 	{
 		uint8_t &receivedData;
+		uint8_t &receivedBus;
 	public:
-		Delegate(uint8_t &receivedData_) : receivedData(receivedData_) {}
+		Delegate(uint8_t &receivedData_, uint8_t &receivedBus_) : receivedData(receivedData_), receivedBus(receivedBus_) {}
 
-		void RxBeo36Delegate_data(uint8_t data) override
+		void RxBeo36Delegate_data(uint8_t data, uint8_t bus) override
 		{
 			receivedData = data;
+			receivedBus = bus;
 		}
 	};
 
 	uint8_t receivedData;
+	uint8_t receivedBus;
 	uint8_t pin = 6;
+	uint8_t bus = 8;
 
-	Delegate delegate(receivedData);
+	Delegate delegate(receivedData, receivedBus);
 
-	RxBeo36 beo36Decoder(LOW, &delegate);
+	RxBeo36 beo36Decoder(LOW, &delegate, bus);
 
 	uint16_t startDelay = 4321;
 	uint32_t data = 0x01;
@@ -85,6 +89,7 @@ TEST(RxTest, Beo36)
 		beo36Decoder.Decoder_pulse(1 ^ g_digitalWriteStateLog[pin][i], g_digitalWriteTimeLog[pin][i]);
 	}
 	EXPECT_EQ(data, receivedData);
+	EXPECT_EQ(bus, receivedBus);
 
 	data = 0x3F;
 	resetLogs();
@@ -97,6 +102,7 @@ TEST(RxTest, Beo36)
 		beo36Decoder.Decoder_pulse(1 ^ g_digitalWriteStateLog[pin][i], g_digitalWriteTimeLog[pin][i]);
 	}
 	EXPECT_EQ(data, receivedData);
+	EXPECT_EQ(bus, receivedBus);
 
 	data = 0x2A;
 	resetLogs();
@@ -109,6 +115,7 @@ TEST(RxTest, Beo36)
 		beo36Decoder.Decoder_pulse(1 ^ g_digitalWriteStateLog[pin][i], g_digitalWriteTimeLog[pin][i]);
 	}
 	EXPECT_EQ(data, receivedData);
+	EXPECT_EQ(bus, receivedBus);
 
 	data = 0x15;
 	resetLogs();
@@ -121,4 +128,5 @@ TEST(RxTest, Beo36)
 		beo36Decoder.Decoder_pulse(1 ^ g_digitalWriteStateLog[pin][i], g_digitalWriteTimeLog[pin][i]);
 	}
 	EXPECT_EQ(data, receivedData);
+	EXPECT_EQ(bus, receivedBus);
 }

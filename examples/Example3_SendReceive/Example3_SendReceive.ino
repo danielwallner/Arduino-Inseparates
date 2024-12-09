@@ -148,14 +148,14 @@ public:
     scheduler.add(this);
   }
 
-  void RxESIDelegate_data(uint64_t data, uint8_t bits) override
+  void RxESIDelegate_data(uint64_t data, uint8_t bits, uint8_t bus) override
   {
     // Printing to serial port in these callbacks is not ideal. DebugPrinter is better than Serial though.
     // Only do this for debugging and know it will affect the timing of tasks!
     printer.printf("ESI data: %0lx%0lx bits: %hhu\n", uint32_t(data >> 32),  uint32_t(data), bits);
   }
 
-  void RxRC5Delegate_data(uint16_t data) override
+  void RxRC5Delegate_data(uint16_t data, uint8_t bus) override
   {
     printer.print("RC5 data: ");
     printer.println(String(data, HEX));

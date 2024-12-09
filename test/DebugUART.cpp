@@ -14,25 +14,30 @@
 
 using namespace inseparates;
 
+static const uint8_t kBus = 9;
+
 class Delegate : public RxUART::Delegate
 {
 public:
 	std::vector<uint8_t> receivedData;
 	uint16_t dataDelay = 0;
 
-	void RxUARTDelegate_data(uint8_t data) override
+	void RxUARTDelegate_data(uint8_t data, uint8_t bus) override
 	{
+		assert(bus == kBus);
 		receivedData.push_back(data);
 		dataDelay = totalDelay();
 	}
 
-	void RxUARTDelegate_timingError() override
+	void RxUARTDelegate_timingError(uint8_t bus) override
 	{
+		assert(bus == kBus);
 		assert(0);
 	}
 
-	void RxUARTDelegate_parityError() override
+	void RxUARTDelegate_parityError(uint8_t bus) override
 	{
+		assert(bus == kBus);
 		assert(0);
 	}
 };
@@ -116,7 +121,7 @@ int main()
 
 		Delegate delegate;
 
-		RxUART rxUART(HIGH, &delegate);
+		RxUART rxUART(HIGH, &delegate, kBus);
 		rxUART.setBaudrate(10000);
 
 		uint16_t startDelay = 4321;
@@ -208,7 +213,7 @@ int main()
 		uint16_t uartStartDelay = 1234;
 		uint8_t pin = 7;
 		uint32_t baudRate = 230400;
-		RxUART rxUART(HIGH, &delegate);
+		RxUART rxUART(HIGH, &delegate, kBus);
 		rxUART.setBaudrate(baudRate);
 
 		uint8_t data = 0x81;
@@ -239,7 +244,7 @@ int main()
 		rxUART.Decoder_timeout(g_digitalWriteStateLog[pin].back());
 		assert(delegate.receivedData.size() && delegate.receivedData.back() == data);
 
-		RxUART rxUART2(HIGH, &delegate);
+		RxUART rxUART2(HIGH, &delegate, kBus);
 		rxUART2.setBaudrate(baudRate);
 		data = 0x5A;
 		resetLogs();
@@ -255,29 +260,27 @@ int main()
 	}
 
 	{
-		class ParityDelegate : public TxUART::Delegate, public RxUART::Delegate
+		class ParityDelegate : public RxUART::Delegate
 		{
 		public:
 			std::vector<uint8_t> receivedData;
 			bool parityError = false;
 
-			void TxUARTDelegate_timingError() override
+			void RxUARTDelegate_data(uint8_t data, uint8_t bus) override
 			{
-				assert(0);
-			}
-
-			void RxUARTDelegate_data(uint8_t data) override
-			{
+                assert(bus == kBus);
 				receivedData.push_back(data);
 			}
 
-			void RxUARTDelegate_timingError() override
+			void RxUARTDelegate_timingError(uint8_t bus) override
 			{
+				assert(bus == kBus);
 				assert(0);
 			}
 
-			void RxUARTDelegate_parityError() override
+			void RxUARTDelegate_parityError(uint8_t bus) override
 			{
+				assert(bus == kBus);
 				parityError = true;
 			}
 		};
@@ -287,7 +290,7 @@ int main()
 		uint16_t uartStartDelay = 4321;
 		uint8_t pin = 1;
 		uint32_t baudRate = 230400;
-		RxUART rxUART(HIGH, &delegate);
+		RxUART rxUART(HIGH, &delegate, kBus);
 		rxUART.setBaudrate(baudRate);
 
 		uint8_t data = 0x81;
@@ -312,7 +315,7 @@ int main()
 		uint16_t uartStartDelay = 5678;
 		uint8_t pin = 4;
 		uint32_t baudRate = 230400;
-		RxUART rxUART(HIGH, &delegate);
+		RxUART rxUART(HIGH, &delegate, kBus);
 		rxUART.setBaudrate(baudRate);
 
 		uint8_t data = 0x81;
@@ -337,7 +340,7 @@ int main()
 		uint8_t pin = 4;
 		uint8_t bits = 3;
 		uint32_t baudRate = 230400;
-		RxUART rxUART(HIGH, &delegate);
+		RxUART rxUART(HIGH, &delegate, kBus);
 		rxUART.setBaudrate(baudRate);
 
 		uint8_t data = 0x2;
@@ -365,7 +368,7 @@ int main()
 		uint8_t pin = 4;
 		uint8_t bits = 8;
 		uint32_t baudRate = 300;
-		RxUART rxUART(HIGH, &delegate);
+		RxUART rxUART(HIGH, &delegate, kBus);
 		rxUART.setBaudrate(baudRate);
 
 		uint8_t data = 0x2;
@@ -419,19 +422,22 @@ int main()
 				_scheduler.add(&_tx1, this);
 			}
 
-			void RxUARTDelegate_data(uint8_t data) override
+			void RxUARTDelegate_data(uint8_t data, uint8_t bus) override
 			{
+				assert(bus == kBus);
 				receivedData.push_back(data);
 				dataDelay = totalDelay();
 			}
 
-			void RxUARTDelegate_timingError() override
+			void RxUARTDelegate_timingError(uint8_t bus) override
 			{
+				assert(bus == kBus);
 				assert(0);
 			}
 
-			void RxUARTDelegate_parityError() override
+			void RxUARTDelegate_parityError(uint8_t bus) override
 			{
+				assert(bus == kBus);
 				assert(0);
 			}
 
@@ -444,7 +450,7 @@ int main()
 
 		Delegate2 delegate(scheduler, data, pin, bits, baudRate);
 
-		RxUART rxUART(HIGH, &delegate);
+		RxUART rxUART(HIGH, &delegate, kBus);
 		rxUART.setBaudrate(baudRate);
 		rxUART.setFormat(Parity::kOdd, bits);
 
