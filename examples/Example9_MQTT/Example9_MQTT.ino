@@ -13,12 +13,14 @@
 // inseparates/commands/IRtoMQTT -- Received messages
 // inseparates/commands/MQTTtoIR -- Send message
 
-// MQTT messages can be multiple JSON lines or just concatenated JSON
-// Also accepts regular JSON on the serial port
+// MQTT messages can be multiple JSON lines or just concatenated JSON.
+// Also accepts JSON on the serial port or a WebSocket connection.
 
-// Extensions compared to IRremoteESP8266
-// bus - integer - when absent or zero send IR
-// client_id - string - when absent all clients send
+// Sending "{wipe}" or "{config}" on serial restarts and activates the config AP.
+
+// Extensions compared to IRremoteESP8266:
+// bus - integer - when absent or zero send IR.
+// client_id - string - when absent all clients send.
 
 // Example messages:
 // {"bus":2,"value":"1","protocol_name":"SWITCH"} - bus is bit number to set
@@ -54,7 +56,6 @@
 //  3  GPIO5  GPIO25 IR EMIT0    IR REC0
 //  2  GPIO16 GPIO26 IR REC0     SR/FLSH/REC1  No interrupts, no PWM, high at boot
 
-#define RESET_SETTINGS 0 // Don't keep this when configuring or settings will be reset again.
 #define ECHO 0
 #define INS_DEBUGGING 0
 #if defined(ESP32)
@@ -63,100 +64,221 @@
 #define REV_A 0
 #endif
 
+#define IR_SEND_ACTIVE LOW
+
 #define ENABLE_IRREMOTE 1
+#define ENABLE_WEBSERVER 1
 
 #define SERIAL_BUFFER_SIZE 256
 
 #include <WiFiManager.h>
 #include <PubSubClient.h>
+#include <Preferences.h>
 
 #define ARDUINOJSON_USE_LONG_LONG 1
 #include <ArduinoJson.h>
 
+#define PREFERENCES_NAMESPACE "InsEx9MQTT"
+#define DEFAULT_DESCRIPTION "Living Room"
+#define DEFAULT_ROOT_TOPIC "inseparates"
+
 WiFiClient espClient;
 PubSubClient mqttClient(espClient);
 
-const char* const MQTT_CLIENT_NAME = "Inseparates";
-const char* const MQTT_STATUS_DESCRIPTION = "Living Room";
-const char* const CONFIG_AP_NAME = "InseparatesMQTTConfig";
-#define ROOT_TOPIC "inseparates"
-
-const char* const MQTT_RX_TOPIC = ROOT_TOPIC "/IRtoMQTT";
-const char* const MQTT_TX_TOPIC = ROOT_TOPIC "/commands/MQTTtoIR";
-const char* const MQTT_STATUS_TOPIC = ROOT_TOPIC "/status/";
-
 String clientId = "Ins-";
-String statusTopic = ROOT_TOPIC "/status/";
+String rootTopic;
+String statusTopic;
+String rxTopic;
+String txTopic;
 
 void logLine(const String &string);
+void messageCallback(const String &payload);
+
+Preferences preferences;
 
 #include "IC.h"
-
-WiFiManagerParameter mqtt_server_param("mqtt_server", "MQTT Server", "192.168.6.66", 40);
-WiFiManagerParameter mqtt_port_param("mqtt_port", "MQTT Port", "1883", 6);
-WiFiManagerParameter mqtt_user_param("mqtt_user", "MQTT Username", "", 40);
-WiFiManagerParameter mqtt_password_param("mqtt_password", "MQTT Password", "", 40);
+#if ENABLE_WEBSERVER
+#include "Web.h"
+#endif
 
 char serialBuffer[SERIAL_BUFFER_SIZE];
-uint8_t serialBufferLength = 0;
-Timekeeper serialTimekeeper;
+uint8_t serialBufferLength;
 Timekeeper mqttTimekeeper;
-uint32_t mqttTimeOut = 0;
+uint32_t mqttTimeOut;
+bool forceConfig;
+
+WiFiManagerParameter hostname_param("hostname", "Host Name");
+WiFiManagerParameter description_param("description", "Description");
+WiFiManagerParameter mqtt_server_param("mqtt_server", "MQTT Server");
+WiFiManagerParameter mqtt_port_param("mqtt_port", "MQTT Port");
+WiFiManagerParameter mqtt_user_param("mqtt_user", "MQTT Username");
+WiFiManagerParameter mqtt_password_param("mqtt_password", "MQTT Password");
+WiFiManagerParameter mqtt_root_param("mqtt_root_topic", "MQTT Root Topic");
+
+void saveSetting(const char *key, const String &value)
+{
+  preferences.putString(key, value);
+  Serial.println("Saved setting: " + String(key));
+}
+
+String loadSetting(const char *key, const char *defaultValue = "")
+{
+  String value = preferences.getString(key, defaultValue);
+  Serial.println("Loaded setting: " + String(key));
+  return value;
+}
+
+void mqttMessageCallback(char *topic, byte *payload, unsigned length)
+{
+  String payloadString;
+  for (unsigned i = 0; i < length; ++i)
+  {
+    payloadString += char(payload[i]);
+  }
+  messageCallback(payloadString);
+}
+
+void config(bool reset = false)
+{
+  if (reset)
+  {
+    Serial.println("Resetting parameters!\nRestarting!");
+    preferences.begin(PREFERENCES_NAMESPACE, false);
+    preferences.clear();
+    preferences.putBool("force_reset", true);
+    preferences.end();
+  }
+  else
+  {
+    Serial.println("Force config!\nRestarting!");
+    preferences.begin(PREFERENCES_NAMESPACE, false);
+    preferences.putBool("force_config", true);
+    preferences.end();
+  }
+
+  delay(500);
+  ESP.restart();
+}
 
 void setup()
 {
+  Serial.begin(115200);
+
+  Serial.println("");
+
+  preferences.begin(PREFERENCES_NAMESPACE, false);
+  String hostname = loadSetting("hostname", PREFERENCES_NAMESPACE);
+  String description = loadSetting("description", DEFAULT_DESCRIPTION);
+  String mqtt_server = loadSetting("mqtt_server");
+  String mqtt_port = loadSetting("mqtt_port", "1883");
+  String mqtt_user = loadSetting("mqtt_user");
+  String mqtt_password = loadSetting("mqtt_password");
+  String mqtt_root = loadSetting("mqtt_root_topic", DEFAULT_ROOT_TOPIC);
+  bool forceReset = preferences.getBool("force_reset", false);
+  forceConfig = preferences.getBool("force_config", false);
+  preferences.end();
+
+  statusTopic = mqtt_root + "/status/";
   clientId += String(random(0xffff), HEX);
   statusTopic += clientId;
+  rxTopic = mqtt_root + "/IRtoMQTT";
+  txTopic = mqtt_root + "/commands/MQTTtoIR";
 
-  Serial.begin(115200);
+  hostname_param.setValue(hostname.c_str(), 40);
+  description_param.setValue(description.c_str(), 40);
+  mqtt_server_param.setValue(mqtt_server.c_str(), 40);
+  mqtt_port_param.setValue(mqtt_port.c_str(), 6);
+  mqtt_user_param.setValue(mqtt_user.c_str(), 40);
+  mqtt_password_param.setValue(mqtt_password.c_str(), 40);
+  mqtt_root_param.setValue(mqtt_root.c_str(), 40);
 
   WiFiManager wifiManager;
 
+  if (forceReset)
+  {
+    Serial.println("Force Reset!");
+    preferences.begin(PREFERENCES_NAMESPACE, false);
+    preferences.putBool("force_reset", false);
+    preferences.end();
+    wifiManager.resetSettings();
+  }
+
+  wifiManager.setHostname(hostname);
+
+  wifiManager.addParameter(&hostname_param);
+  wifiManager.addParameter(&description_param);
   wifiManager.addParameter(&mqtt_server_param);
   wifiManager.addParameter(&mqtt_port_param);
   wifiManager.addParameter(&mqtt_user_param);
   wifiManager.addParameter(&mqtt_password_param);
+  wifiManager.addParameter(&mqtt_root_param);
 
-  wifiManager.setSaveConfigCallback(saveConfigCallback);
+  wifiManager.setSaveParamsCallback(saveParamsCallback);
 
-#if RESET_SETTINGS
-  wifiManager.resetSettings();
-#endif
+  String apName(hostname);
+  apName += "_Config";
 
-  if (!wifiManager.autoConnect(CONFIG_AP_NAME))
+  if (forceConfig)
+  {
+    Serial.println("Force Config!");
+    preferences.begin(PREFERENCES_NAMESPACE, false);
+    preferences.putBool("force_config", false);
+    preferences.end();
+    wifiManager.startConfigPortal(apName.c_str());
+  }
+  else if (!wifiManager.autoConnect(apName.c_str()))
   {
     Serial.println("ERROR: Failed to connect! Restarting!");
-    delay(5000);
+    delay(500);
     ESP.restart();
   }
 
-  uint16_t mqtt_port = atoi(mqtt_port_param.getValue());
-  mqttClient.setServer(mqtt_server_param.getValue(), mqtt_port);
-  mqttClient.setCallback(callback);
-
+#if ENABLE_IRREMOTE
   setupIR();
+#endif
+#if ENABLE_WEBSERVER
+  setupWebServer();
+#endif
   setupInseparates();
+
+  if (!mqtt_server_param.getValue()[0])
+  {
+    Serial.print("MQTT server not set! Disabling MQTT!");
+    return;
+  }
+
+  uint16_t mqtt_port_value = atoi(mqtt_port.c_str());
+  mqttClient.setServer(mqtt_server_param.getValue(), mqtt_port_value);
+  mqttClient.setCallback(mqttMessageCallback);
 }
 
 void loop()
 {
-  if (!mqttClient.connected())
+  if (mqtt_server_param.getValue()[0])
   {
-    reconnect();
+    if (!mqttClient.connected())
+    {
+      reconnect();
+    }
+    mqttClient.loop();
   }
-  mqttClient.loop();
- 
+
+#if ENABLE_IRREMOTE
   loopIR();
+#endif
+#if ENABLE_WEBSERVER
   loopInseparates();
+#endif
 
   if (Serial.available() > 0)
   {
-    serialTimekeeper.reset();
     uint8_t data = Serial.read();
     if (!serialBufferLength)
     {
       if (data != '{')
+      {
         return;
+      }
       serialBuffer[serialBufferLength++] = data;
     }
     else if (serialBufferLength + 1 < SERIAL_BUFFER_SIZE)
@@ -169,6 +291,18 @@ void loop()
       logLine("Serial overflow");
     }
 
+    if (serialBufferLength == 6 && !strncmp("{wipe}", (char*)serialBuffer, 6))
+    {
+      config(true);
+      serialBufferLength = 0;
+    }
+
+    if (serialBufferLength == 8 && !strncmp("{config}", (char*)serialBuffer, 8))
+    {
+      config(false);
+      serialBufferLength = 0;
+    }
+
     if (serialBufferLength && serialBuffer[serialBufferLength - 1] == '}')
     {
       serialBuffer[serialBufferLength] = 0;
@@ -177,16 +311,29 @@ void loop()
       logString += serialBuffer;
       logLine(logString);
 
-      handleJSON(serialBuffer);
+      messageCallback(serialBuffer);
 
       serialBufferLength = 0;
     }
   }
 }
 
-void saveConfigCallback()
+void saveParamsCallback()
 {
-  Serial.println("New configuration saved!");
+  preferences.begin(PREFERENCES_NAMESPACE, false);
+  saveSetting("hostname", hostname_param.getValue());
+  saveSetting("description", description_param.getValue());
+  saveSetting("mqtt_server", mqtt_server_param.getValue());
+  saveSetting("mqtt_port", mqtt_port_param.getValue());
+  saveSetting("mqtt_user", mqtt_user_param.getValue());
+  saveSetting("mqtt_password", mqtt_password_param.getValue());
+  saveSetting("mqtt_root_topic", mqtt_root_param.getValue());
+  preferences.end();
+  if (forceConfig)
+  {
+    delay(500);
+    ESP.restart();
+  }
 }
 
 void reconnect()
@@ -205,12 +352,16 @@ void reconnect()
   if (mqttClient.connect(clientId.c_str(), mqtt_user, mqtt_password, statusTopic.c_str(), 1, true, ""))
   {
     Serial.println(" connected");
-    mqttClient.subscribe(MQTT_TX_TOPIC);
+    mqttClient.subscribe(txTopic.c_str());
 
     mqttTimeOut = 0;
 
+    preferences.begin(PREFERENCES_NAMESPACE, true);
+    String description = preferences.getString("description");
+    preferences.end();
+
     StaticJsonDocument<200> doc;
-    doc["description"] = MQTT_STATUS_DESCRIPTION;
+    doc["description"] = description;
     String jsonString;
     serializeJson(doc, jsonString);
 
@@ -232,6 +383,9 @@ void logLine(const String &string)
   if (mqttClient.connected())
     mqttClient.publish(logTopic.c_str(), string.c_str(), false);
   Serial.println(string);
+#if ENABLE_WEBSERVER
+  websocketLogMessage(string);
+#endif
 }
 
 void hex64(String &hexStr, uint64_t value)
@@ -270,25 +424,25 @@ void publish(Message &message)
   String json;
   serializeJson(doc, json);
 
-  mqttClient.publish(MQTT_RX_TOPIC, json.c_str(), false);
+  mqttClient.publish(rxTopic.c_str(), json.c_str(), false);
+#if ENABLE_WEBSERVER
+  websocketMessage(json.c_str());
+#endif
 }
 
-void callback(char* topic, byte* payload, unsigned int length)
+void messageCallback(const String &payload)
 {
-  char terminatedPayload[length + 1];
-  unsigned writePos = 0;
-  for (unsigned i = 0; i < length; ++i)
+  size_t startPos = 0;
+  for (size_t i = 0; i < payload.length(); ++i)
   {
-    terminatedPayload[writePos] = payload[i];
-    ++writePos;
     if (payload[i] == '}')
     {
-      terminatedPayload[writePos] = 0;
-      handleJSON(terminatedPayload);
+      String jsonSegment = payload.substring(startPos, i + 1);
+      handleJSON(jsonSegment.c_str());
 #if ECHO
-      logLine(terminatedPayload);
+      logLine(jsonSegment.c_str());
 #endif
-      writePos = 0;
+      startPos = i + 1;
     }
   }
 }

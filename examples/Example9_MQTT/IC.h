@@ -1,6 +1,7 @@
 // Copyright (c) 2024 Daniel Wallner
 
-// Implements the interconnect protocols and B&O 36/455 kHz IR decoding
+// Implements the wired interconnect protocols and B&O 36/455 kHz IR decoding.
+// Implements RC5/SIRC/NEC IR support When ENABLE_IRREMOTE is disabled.
 
 #define DEBUG_FULL_TIMING 0
 #define DEBUG_CYCLE_TIMING 0
@@ -13,7 +14,8 @@
 #define ENABLE_READ_INTERRUPTS true
 #endif
 
-#if defined(ESP32) || !ENABLE_IRREMOTE
+// Write timer is currently not supported for PWM output which makes IR timing less accurate
+#if defined(ESP32)
 #define ENABLE_WRITE_TIMER 1
 #else
 // IRremoteESP8266 use the only available timer on ESP8266.
@@ -175,6 +177,10 @@ OpenDrainPinWriter technicsDataPinWriter(kTechnicsSCDataPin, LOW, INPUT_PULLUP);
 OpenDrainPinWriter technicsClockPinWriter(kTechnicsSCClockPin, LOW, INPUT_PULLUP);
 #endif
 
+#if !ENABLE_IRREMOTE
+PWMPinWriter irPinWriter(kIRSendPin, IR_SEND_ACTIVE);
+#endif
+
 void InsError(uint32_t error)
 {
   char errorMsg[5];
@@ -195,13 +201,13 @@ void updateSwitches(uint64_t switchState)
 }
 
 class MainTask  :
-#if HAVE_RC5
+#if HAVE_RC5 || !ENABLE_IRREMOTE
   public RxRC5::Delegate,
 #endif
 #if HAVE_ESI
   public RxESI::Delegate,
 #endif
-#if HAVE_SR
+#if HAVE_SR || !ENABLE_IRREMOTE
   public RxNEC::Delegate,
   public RxSIRC::Delegate,
 #endif
@@ -252,6 +258,16 @@ class MainTask  :
   std::deque<Message> _technicsSendBuffer;
 #endif
 
+#if !ENABLE_IRREMOTE
+  TxRC5 _txRC5_IR;
+  RxRC5 _rxRC5_IR;
+  TxNEC _txNEC_IR;
+  RxNEC _rxNEC_IR;
+  TxSIRC _txSIRC_IR;
+  RxSIRC _rxSIRC_IR;
+  TxDatalink86 _tx455;
+#endif
+
   uint64_t _switchState = 0;
 
   std::map<SteppedTask*, std::deque<Message>> _sendBuffer;
@@ -292,6 +308,15 @@ public:
     ,_rxTechnics(kTechnicsSCDataPin, kTechnicsSCClockPin, LOW, this),
     _txTechnics(&technicsDataPinWriter, &technicsClockPinWriter, kTechnicsSCDataPin, kTechnicsSCClockPin, LOW, this)
 #endif
+#if !ENABLE_IRREMOTE
+    ,_txRC5_IR(&irPinWriter, IR_SEND_ACTIVE),
+    _rxRC5_IR(LOW, this, 0),
+    _txNEC_IR(&irPinWriter, IR_SEND_ACTIVE),
+    _rxNEC_IR(LOW, this, 0),
+    _txSIRC_IR(&irPinWriter, IR_SEND_ACTIVE),
+    _rxSIRC_IR(LOW, this, 0),
+    _tx455(&irPinWriter, IR_SEND_ACTIVE)
+#endif
   {
   }
 
@@ -327,6 +352,12 @@ public:
     scheduler.add(&writeScheduler);
 #endif
 
+#if !ENABLE_IRREMOTE
+    scheduler.add(&_rxRC5_IR, kIRReceivePin, ENABLE_READ_INTERRUPTS);
+    scheduler.add(&_rxNEC_IR, kIRReceivePin, ENABLE_READ_INTERRUPTS);
+    scheduler.add(&_rxSIRC_IR, kIRReceivePin, ENABLE_READ_INTERRUPTS);
+#endif
+
 #if HAVE_TRIGGER
     Serial.print("Trigger 0 active on pin ");
     Serial.println(kTrigger0Pin);
@@ -335,12 +366,18 @@ public:
 #endif
     Serial.print("IR 455 receiver active on pin ");
     Serial.println(kIR455ReceivePin);
+#if HAVE_RC5
     Serial.print("RC5 bus active on pin ");
     Serial.println(kRC5Pin);
+#endif
+#if HAVE_ESI
     Serial.print("ESI bus active on pin ");
     Serial.println(kESIPin);
-    Serial.print("IR bus active on pin ");
+#endif
+#if HAVE_SR
+    Serial.print("SR bus active on pin ");
     Serial.println(kSRPin);
+#endif
 #if HAVE_DATALINK86
     Serial.print("Datalink 86 active on pin ");
     Serial.println(kDatalink86Pin);
@@ -359,7 +396,7 @@ public:
 #endif
   }
 
-#if HAVE_RC5
+#if HAVE_RC5 || !ENABLE_IRREMOTE
   void RxRC5Delegate_data(uint16_t data, uint8_t bus) override
   {
     Message message;
@@ -387,7 +424,7 @@ public:
   }
 #endif
 
-#if HAVE_SR
+#if HAVE_SR || !ENABLE_IRREMOTE
   void RxNECDelegate_data(uint32_t data, uint8_t bus) override
   {
     Message message;
@@ -508,6 +545,7 @@ public:
   void send(Message &message, bool repeatMessage = false)
   {
     SteppedTask *repeatTask = nullptr;
+    bool unhandled = false;
     switch(message.protocol)
     {
     case SWITCH:
@@ -544,8 +582,23 @@ public:
       break;
 #endif
 
-#if HAVE_RC5
     case RC5:
+#if !ENABLE_IRREMOTE
+      if (message.bus == 0)
+      {
+        if (scheduler.active(&_txRC5_IR))
+        {
+          _sendBuffer[&_txRC5_IR].push_back(message);
+          break;
+        }
+        irPinWriter.prepare(36000, 30);
+        _txRC5_IR.prepare(message.value);
+        scheduler.add(&_txRC5_IR, this);
+        repeatTask = &_txRC5_IR;
+        break;
+      }
+#endif
+#if HAVE_RC5
       if (scheduler.active(&_txRC5))
       {
         _sendBuffer[&_txRC5].push_back(message);
@@ -558,8 +611,10 @@ public:
       scheduler.add(&_txRC5, this);
 #endif
       repeatTask = &_txRC5;
-      break;
+#else
+      unhandled = true;
 #endif
+      break;
 
 #if HAVE_ESI
     case ESI:
@@ -578,9 +633,24 @@ public:
       break;
 #endif
 
-#if HAVE_SR
     case NEC:
     case NEC2:
+#if !ENABLE_IRREMOTE
+      if (message.bus == 0)
+      {
+        if (scheduler.active(&_txNEC_IR))
+        {
+          _sendBuffer[&_txNEC_IR].push_back(message);
+          break;
+        }
+        irPinWriter.prepare(38000, 30);
+        _txNEC_IR.prepare(message.value);
+        scheduler.add(&_txNEC_IR, this);
+        repeatTask = &_txNEC_IR;
+        break;
+      }
+#endif
+#if HAVE_SR
       if (scheduler.active(&_txNEC))
       {
         _sendBuffer[&_txNEC].push_back(message);
@@ -593,9 +663,28 @@ public:
       scheduler.add(&_txNEC, this);
 #endif
       repeatTask = &_txNEC;
+#else
+      unhandled = true;
+#endif
       break;
 
     case SONY:
+#if !ENABLE_IRREMOTE
+      if (message.bus == 0)
+      {
+        if (scheduler.active(&_txSIRC_IR))
+        {
+          _sendBuffer[&_txSIRC_IR].push_back(message);
+          break;
+        }
+        irPinWriter.prepare(40000, 30);
+        _txSIRC_IR.prepare(message.value, message.bits);
+        scheduler.add(&_txSIRC_IR, this);
+        repeatTask = &_txSIRC_IR;
+        break;
+      }
+#endif
+#if HAVE_SR
       if (scheduler.active(&_txSIRC))
       {
         _sendBuffer[&_txSIRC].push_back(message);
@@ -608,27 +697,44 @@ public:
       scheduler.add(&_txSIRC, this);
 #endif
       repeatTask = &_txSIRC;
-      break;
+#else
+      unhandled = true; 
 #endif
+      break;
 
-#if HAVE_DATALINK86
     case DATALINK86:
+#if !ENABLE_IRREMOTE
+      if (message.bus == 0)
       {
-        if (scheduler.active(&_txDatalink86))
+        if (scheduler.active(&_tx455))
         {
-          _sendBuffer[&_txDatalink86].push_back(message); 
+          _sendBuffer[&_tx455].push_back(message);
           break;
         }
-        _txDatalink86.prepare(message.value, message.bits, false, repeatMessage);
-#if ENABLE_WRITE_TIMER
-        writeScheduler.add(&_txDatalink86, kDatalink86Pin, this);
-#else
-        scheduler.add(&_txDatalink86, this);
-#endif
-        repeatTask = &_txDatalink86;
+        irPinWriter.prepare(455000, 30);
+        _tx455.prepare(message.value, message.bits, true, repeatMessage);
+        scheduler.add(&_tx455, this);
+        repeatTask = &_tx455;
+        break;
       }
-      break;
 #endif
+#if HAVE_DATALINK86
+      if (scheduler.active(&_txDatalink86))
+      {
+        _sendBuffer[&_txDatalink86].push_back(message);
+        break;
+      }
+      _txDatalink86.prepare(message.value, message.bits, false, repeatMessage);
+#if ENABLE_WRITE_TIMER
+      writeScheduler.add(&_txDatalink86, kDatalink86Pin, this);
+#else
+      scheduler.add(&_txDatalink86, this);
+#endif
+      repeatTask = &_txDatalink86;
+#else
+      unhandled = true;
+#endif
+      break;
 
 #if HAVE_DATALINK80
     case DATALINK80:
@@ -671,9 +777,13 @@ public:
 #endif
 
     case BEO36:
-      // Not handled since that would require an additional IR send pin!
+      // Only receive is implemeted for BEO36.
     default:
-      logLine("UNHANDLED IC");
+      unhandled = true;
+    }
+    if (unhandled)
+    {
+      logLine(message.bus ? "UNHANDLED IC" : "UNHANDLED IR");
       return;
     }
     if (!repeatMessage && repeatTask && message.repeat > 0)

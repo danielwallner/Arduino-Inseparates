@@ -41,14 +41,14 @@
 #define SEND_BANG_OLUFSEN 1
 
 enum ins_decode_type_t {
+  ESI = 253,
+  BEO36,
+  DATALINK86,
   SWITCH = 256,
   SWITCH_TOGGLE,
   TRIGGER,
   NEC2, // NEC with full message repeat
-  ESI,
-  BEO36,
   DATALINK80,
-  DATALINK86,
   TECHNICS_SC,
 };
 
@@ -83,7 +83,7 @@ struct Message
 #include <IRsend.h>
 
 IRrecv irrecv(kIRReceivePin);
-IRsend irsend(kIRSendPin, true);
+IRsend irsend(kIRSendPin, IR_SEND_ACTIVE == LOW);
 decode_results results;
 inseparates::LockFreeFIFO<Message, 128> irFIFO;
 #endif
@@ -158,6 +158,8 @@ void dispatch(Message &message)
 
   if (message.bus > 0 || message.protocol >= SWITCH)
   {
+    if (message.bus < 1)
+      message.bus = 1;
     sendInseparates(message);
   }
   else
@@ -167,16 +169,16 @@ void dispatch(Message &message)
     irFIFO.writeRef() = message;
     irFIFO.push();
 #else
-    logLine("UNHANDLED IR");
+    sendInseparates(message);
 #endif
   }
 }
 
+#if ENABLE_IRREMOTE
 inseparates::Timekeeper16 irTimekeeper;
 
 void setupIR()
 {
-#if ENABLE_IRREMOTE
   irrecv.enableIRIn();
   irTimekeeper.reset();
 
@@ -187,12 +189,10 @@ void setupIR()
 
   Serial.print("IR transmitter active on pin ");
   Serial.println(kIRSendPin);
-#endif
 }
 
 void loopIR()
 {
-#if ENABLE_IRREMOTE
   if (!irFIFO.empty())
   {
     const Message &message = irFIFO.readRef();
@@ -227,5 +227,5 @@ void loopIR()
       received(message);
     }
   }
-#endif
 }
+#endif
