@@ -136,8 +136,8 @@ public:
 		analogWriteRange(63);
 #elif defined(ESP32)
 #if ESP_IDF_VERSION_MAJOR < 5
-		ledcAttachPin(_pin, 0);
 		ledcSetup(0, _frequency, 6);
+		ledcAttachPin(_pin, 0);
 #else
 		ledcAttach(_pin, _frequency, 6);
 #endif
