@@ -15,6 +15,10 @@
 static const uint8_t D_3  = 5;
 static const uint8_t D_8  = 12;
 static const uint8_t D_9  = 13;
+#elif defined(CONFIG_IDF_TARGET_ESP32C3) // ESP32 C3 16 pin supermini
+static const uint8_t D_3  = 10; // IR RECEIVE
+static const uint8_t D_8  = 0; // RC5
+static const uint8_t D_9  = 2; // IR SEND
 #elif defined(ESP32) // WEMOS D1 R32
 static const uint8_t D_3  = 25;
 static const uint8_t D_8  = 12;
@@ -38,7 +42,7 @@ const uint16_t kIRSendPin = D_9;
 #ifdef INPUT_PULLDOWN
 #define OFF_MODE INPUT_PULLDOWN
 #else
-#define OFF_MODE OUTPUT // Should be INPUT but that will make the pin stay high when off if there's no pull-down
+#define OFF_MODE INPUT
 #endif
 const uint16_t kIRSendPin = D_8;
 #endif

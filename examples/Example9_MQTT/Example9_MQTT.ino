@@ -1,24 +1,35 @@
 // Copyright (c) 2024 Daniel Wallner
 
-// ESP8266/ESP32 MQTT client.
+// ESP8266/ESP32 MQTT client and HTTP/Websocket server.
 // Connect to temporary AP and navigate to http://192.168.4.1 to configure.
 
 // Supports interconnect protocols with Inseparates
 // Supports IR protocols with IRremoteESP8266
 // Partially compatible with OpenMQTTGateway's regular JSON message structure.
 
-// Topics:
+// MQTT Topics:
 // inseparates/status/{id} -- Active instances
 // inseparates/status/{id}/log -- Instance log
 // inseparates/commands/IRtoMQTT -- Received messages
 // inseparates/commands/MQTTtoIR -- Send message
 
-// MQTT messages can be multiple JSON lines or just concatenated JSON.
-// Also accepts JSON on the serial port or a WebSocket connection.
+// Messages can be multiple JSON lines or just concatenated JSON.
+
+// Supports the following communication modes:
+
+// MQTT
+// Serial
+// WebSocket on /ws
+// HTTP POST send only on /send
+// Web
 
 // Sending "{wipe}" or "{config}" on serial restarts and activates the config AP.
 
-// Extensions compared to IRremoteESP8266:
+// Extensions compared to OpenMQTTGateway regular JSON messages:
+// address - integer/hex - used instead of value - not supported by all protocols.
+// command - integer/hex - used instead of value - not supported by all protocols.
+// extended - integer/hex - used instead of value - either extended data or a signal use an extended protocol - not supported by all protocols.
+// repeat - integer - when set to -1 results in indefinite repeat - stop by sending message with no value or different valid message on same bus and protocol.
 // bus - integer - when absent or zero send IR.
 // client_id - string - when absent all clients send.
 
@@ -58,16 +69,20 @@
 
 #define ECHO 0
 #define INS_DEBUGGING 0
-#if defined(ESP32)
-#define REV_A 1
-#else
-#define REV_A 0
-#endif
 
-#define IR_SEND_ACTIVE LOW
+#define IR_SEND_ACTIVE HIGH
+#define SWITCH_ACTIVE_LOW 1
 
-#define ENABLE_IRREMOTE 1
+#define ENABLE_INSEPARATES 1
+#define ENABLE_IRREMOTE 0
 #define ENABLE_WEBSERVER 1
+
+#define ENABLE_SWITCH 1
+#define ENABLE_TRIGGER 1
+#define ENABLE_IR_455 0
+#define ENABLE_SECOND_SR 0
+#define ENABLE_BEO_IC 0
+#define ENABLE_TECHNICS_SC 1
 
 #define SERIAL_BUFFER_SIZE 256
 
@@ -75,8 +90,12 @@
 #include <PubSubClient.h>
 #include <Preferences.h>
 
+#include <FastTime.h>
+
 #define ARDUINOJSON_USE_LONG_LONG 1
 #include <ArduinoJson.h>
+
+using namespace inseparates;
 
 #define PREFERENCES_NAMESPACE "InsEx9MQTT"
 #define DEFAULT_DESCRIPTION "Living Room"
@@ -91,8 +110,17 @@ String statusTopic;
 String rxTopic;
 String txTopic;
 
-void logLine(const String &string);
-void messageCallback(const String &payload);
+enum ins_log_target_t {
+  ILT_NONE = 0,
+  ILT_ALL,
+  ILT_SERIAL,
+  ILT_MQTT,
+  ILT_WEBSOCKET,
+};
+
+void logLine(const String &string, ins_log_target_t target = ILT_NONE);
+String getLogLine();
+void messageCallback(const String &payload, ins_log_target_t target);
 
 Preferences preferences;
 
@@ -105,6 +133,7 @@ char serialBuffer[SERIAL_BUFFER_SIZE];
 uint8_t serialBufferLength;
 Timekeeper mqttTimekeeper;
 uint32_t mqttTimeOut;
+String lastLogLine;
 bool forceConfig;
 
 WiFiManagerParameter hostname_param("hostname", "Host Name");
@@ -135,7 +164,7 @@ void mqttMessageCallback(char *topic, byte *payload, unsigned length)
   {
     payloadString += char(payload[i]);
   }
-  messageCallback(payloadString);
+  messageCallback(payloadString, ILT_MQTT);
 }
 
 void config(bool reset = false)
@@ -288,7 +317,7 @@ void loop()
     else
     {
       serialBufferLength = 0;
-      logLine("Serial overflow");
+      Serial.println("Serial overflow");
     }
 
     if (serialBufferLength == 6 && !strncmp("{wipe}", (char*)serialBuffer, 6))
@@ -309,9 +338,9 @@ void loop()
 
       String logString = "Serial: ";
       logString += serialBuffer;
-      logLine(logString);
+      Serial.println(logString);
 
-      messageCallback(serialBuffer);
+      messageCallback(serialBuffer, ILT_SERIAL);
 
       serialBufferLength = 0;
     }
@@ -357,11 +386,16 @@ void reconnect()
     mqttTimeOut = 0;
 
     preferences.begin(PREFERENCES_NAMESPACE, true);
+    String hostname = preferences.getString("hostname");
     String description = preferences.getString("description");
     preferences.end();
 
     StaticJsonDocument<200> doc;
+    doc["name"] = hostname;
     doc["description"] = description;
+#if ENABLE_WEBSERVER
+    doc["url"] = "http://" + WiFi.localIP().toString();
+#endif
     String jsonString;
     serializeJson(doc, jsonString);
 
@@ -377,15 +411,30 @@ void reconnect()
   }
 }
 
-void logLine(const String &string)
+void logLine(const String &string, ins_log_target_t send)
 {
-  String logTopic = statusTopic + "/log";
-  if (mqttClient.connected())
-    mqttClient.publish(logTopic.c_str(), string.c_str(), false);
-  Serial.println(string);
+  lastLogLine = string;
+  if (send == ILT_ALL || send == ILT_MQTT)
+  {
+    String logTopic = statusTopic + "/log";
+    if (mqttClient.connected())
+      mqttClient.publish(logTopic.c_str(), string.c_str(), false);
+  }
+  if (send == ILT_ALL || send == ILT_SERIAL)
+  {
+    Serial.println(string);
+  }
 #if ENABLE_WEBSERVER
-  websocketLogMessage(string);
+  if (send == ILT_ALL || send == ILT_WEBSOCKET)
+  {
+    websocketLogMessage(string);
+  }
 #endif
+}
+
+String getLogLine()
+{
+  return lastLogLine;
 }
 
 void hex64(String &hexStr, uint64_t value)
@@ -430,126 +479,190 @@ void publish(Message &message)
 #endif
 }
 
-void messageCallback(const String &payload)
+void messageCallback(const String &payload, ins_log_target_t target)
 {
+  lastLogLine.clear();
   size_t startPos = 0;
   for (size_t i = 0; i < payload.length(); ++i)
   {
     if (payload[i] == '}')
     {
       String jsonSegment = payload.substring(startPos, i + 1);
-      handleJSON(jsonSegment.c_str());
+      handleJSON(jsonSegment.c_str(), target);
 #if ECHO
-      logLine(jsonSegment.c_str());
+      logLine(jsonSegment.c_str(), target);
 #endif
       startPos = i + 1;
     }
   }
 }
 
-void handleJSON(const char* string)
+void handleJSON(const char* string, ins_log_target_t target)
 {
-  Message message;
-  message.value = 0;
-  message.protocol_name = nullptr;
-  message.protocol = 0;
-  message.repeat = 0;
-  message.bits = 0;
-  message.bus = 0;
+  Message message = {};
+  message.logTarget = target;
 
   StaticJsonDocument<256> doc;
 
   DeserializationError error = deserializeJson(doc, string);
 
-  String errorString;
-
   if (error)
   {
-    errorString = "JSON parse error: ";
+    String errorString = "JSON parse error: ";
     errorString += error.f_str();
-    errorString = "\nInput: ";
     errorString += string;
-    logLine(errorString);
+    logLine(errorString, target);
     return;
   }
 
   for (JsonPair kv : doc.as<JsonObject>())
   {
-    if (kv.key() == "client_id")
+    const char *strVal = nullptr;
+    const char *errorMsg = nullptr;
+    int64_t intVal = 0;
+    bool isNum = false;
+    bool mustBeNum = true;
+
+    try
     {
-      const char* client_id = kv.value().as<const char*>();
-      if (strcmp(client_id, clientId.c_str()))
+      if (kv.value().is<const char*>())
       {
-        String logString = "Ignoring message to ";
-        logString += client_id;
-        logLine(logString);
-        return;
+        strVal = kv.value().as<const char*>();
+        if (!strcmp(strVal, "0x"))
+        {
+          size_t pos = 0;
+          intVal = std::stoull(strVal, &pos, 0);
+          if (strVal[pos] == '\0')
+          {
+            isNum = true;
+          }
+        }
+        else if (*strVal == '-' || isdigit(*strVal))
+        {
+          size_t pos = 0;
+          intVal = std::stoll(strVal, &pos, 0);
+          if (strVal[pos] == '\0')
+          {
+            isNum = true;
+          }
+        }
+      }
+      else if (kv.value().is<long long>())
+      {
+        isNum = true;
+        intVal = kv.value().as<long long>();
+      }
+      else if (kv.value().is<unsigned long long>())
+      {
+        isNum = true;
+        intVal = kv.value().as<unsigned long long>();
+      }
+
+      if (strVal && kv.key() == "client_id")
+      {
+        mustBeNum = false;
+        if (strcmp(strVal, clientId.c_str()))
+        {
+          String logString = "Ignoring message to ";
+          logString += strVal;
+          logLine(logString, target);
+          return;
+        }
+      }
+      else if (kv.key() == "bus")
+      {
+        if (unsigned(intVal) > 0xff)
+          throw 1;
+        message.bus = intVal;
+      }
+      else if (kv.key() == "address")
+      {
+        message.setAddress(intVal);
+      }
+      else if (kv.key() == "command")
+      {
+        message.setCommand(intVal);
+      }
+      else if (kv.key() == "extended")
+      {
+        message.setExtended(intVal);
+      }
+      else if (kv.key() == "value")
+      {
+        // Hex is accepted here too!
+        message.setValue(intVal);
+      }
+      else if (kv.key() == "hex")
+      {
+        message.setValue(intVal);
+      }
+      else if (kv.key() == "repeat")
+      {
+        if (intVal < 0)
+          throw 2;
+        message.repeat = intVal;
+      }
+      else if (kv.key() == "bits")
+      {
+        if (intVal < 0)
+          throw 3;
+        message.bits = intVal;
+      }
+      else if (kv.key() == "protocol")
+      {
+        if (intVal < 0)
+          throw 4;
+        if (message.protocol && message.protocol != intVal)
+        {
+          errorMsg = "Protocol mismatch: ";
+          throw 0;
+        }
+        message.protocol = intVal;
+      }
+      else if (strVal && kv.key() == "protocol_name")
+      {
+        mustBeNum = false;
+        message.protocol_name = strVal;
+        int16_t protocol = strToDecodeType(message.protocol_name);
+        if (message.protocol && message.protocol != protocol)
+        {
+          errorMsg = "Protocol error: ";
+          throw 0;
+        }
+        message.protocol = protocol;
+      }
+      else
+      {
+        errorMsg = "Unknown key: ";
+        throw 0;
+      }
+
+      if (mustBeNum && !isNum)
+      {
+        errorMsg = "Value is not a number: ";
+        throw 0;
       }
     }
-    else if (kv.key() == "bus")
+    catch (...)
     {
-      message.bus = kv.value().as<uint8_t>();
-    }
-    else if (kv.key() == "value")
-    {
-      message.value = kv.value().as<unsigned long long>();
-    }
-    else if (kv.key() == "hex")
-    {
-      const char* hex = kv.value().as<const char*>();
-      uint64_t value = std::stoull(hex, nullptr, 16);
-      message.value = value;
-    }
-    else if (kv.key() == "repeat")
-    {
-      message.repeat = kv.value().as<uint8_t>();
-    }
-    else if (kv.key() == "bits")
-    {
-      message.bits = kv.value().as<uint8_t>();
-    }
-    else if (kv.key() == "protocol")
-    {
-      int16_t protocol = kv.value().as<signed short>();
-      if (message.protocol && message.protocol != protocol)
-      {
-        logLine("Protocol mismatch");
-        return;
-      }
-      message.protocol = protocol;
-    }
-    else if (kv.key() == "protocol_name")
-    {
-      message.protocol_name = kv.value().as<const char*>();
-      int16_t protocol = strToDecodeType(message.protocol_name);
-      if (message.protocol && message.protocol != protocol)
-      {
-        logLine("Protocol mismatch");
-        return;
-      }
-      message.protocol = protocol;
-    }
-    else
-    {
+      String errorString;
       if (errorString.length())
         errorString += "\n";
-      errorString += "Unknown key:";
+      errorString += errorMsg ? errorMsg : "Invalid value: ";
       errorString += kv.key().c_str();
       errorString += ": ";
       if (kv.value().is<const char*>())
       {
-        errorString += ": ";
         errorString += kv.value().as<const char*>();
       }
       else if (kv.value().is<int>())
       {
         errorString += kv.value().as<int>();
       }
+      logLine(errorString, target);
+      return;
     }
   }
-
-  if (errorString.length())
-    logLine(errorString);
 
   dispatch(message);
 }

@@ -97,8 +97,13 @@ const char webInterfaceHTML[] PROGMEM = R"rawliteral(
     };
 
     ws.onclose = function() {
+      console.log("WebSocket connection closed");
       updateStatus(false);
-      setTimeout(setupWebSocket, 3000);
+      setTimeout(setupWebSocket, 2000);
+    };
+
+    ws.onerror = (error) => {
+      console.error("WebSocket Error:", error);
     };
 
     ws.onmessage = function(event) {
@@ -255,7 +260,7 @@ void webSocketCallback(AsyncWebSocket *server, AsyncWebSocketClient *client, Aws
   String response = "ACK:" + message;
   client->text(response);
 
-  messageCallback(message);
+  messageCallback(message, ILT_WEBSOCKET);
 }
 
 void setupWebServer()
@@ -267,6 +272,24 @@ void setupWebServer()
 
   ws.onEvent(webSocketCallback);
   server.addHandler(&ws);
+
+  server.on("/send", HTTP_POST, [](AsyncWebServerRequest *request) {}, NULL,
+    [](AsyncWebServerRequest *request, uint8_t *data, size_t len, size_t index, size_t total)
+    {
+      String message(data, len);
+      messageCallback(message, ILT_NONE);
+
+      // This check will not find messages from the asynch IR send.
+      String logLine = getLogLine();
+      if (logLine.length())
+      {
+        request->send(200, "application/json", "{\"status\":\"error\",\"message\":\"" + logLine + "\"}");
+        return;
+      }
+
+      request->send(200, "application/json", "{\"status\":\"success\",\"message\":\"Message sent\"}");
+    }
+  );
 
   server.begin();
 }

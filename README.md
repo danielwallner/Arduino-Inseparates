@@ -119,11 +119,11 @@ Controls IR send with serial port to test IR commands.
 
 Unfinished example that currently only prints to serial.
 
-### MQTT
+### MQTT / WebSocket / HTTP
 
 **[Example9_MQTT](./examples/Example9_MQTT)**
 
-MQTT client that supports both IR and wired protocols.<br/>
+MQTT client and WebSocket / HTTP server that supports both IR and wired protocols.<br/>
 Makes it possible to control your audio system from your home automation or by custom remote applications.<br/>
 Uses IRremoteESP8266 for extensive IR protocol support.<br/>
 Partially compatible with OpenMQTTGateway's regular JSON message structure.<br/>
