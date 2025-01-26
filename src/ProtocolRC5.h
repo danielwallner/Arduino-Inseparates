@@ -44,7 +44,7 @@ public:
 
 	// No safety belts here, can overflow!
 	static inline uint16_t encodeRC5(uint8_t toggle, uint8_t address, uint8_t command) { return (uint16_t(0xC0 | (toggle << 5) | address) << 6) | command; }
-	static inline uint16_t encodeRC5X(uint8_t toggle, uint8_t address, uint8_t command) { return (uint16_t(0x80 | (command & 0x40) | (toggle << 5) | address) << 6) | (command & 0x3F); }
+	static inline uint16_t encodeRC5X(uint8_t toggle, uint8_t address, uint8_t command) { return (uint16_t(0x80 | ((command & 0x40) ^ 0x40) | (toggle << 5) | address) << 6) | (command & 0x3F); }
 
 	uint16_t SteppedTask_step() override
 	{
