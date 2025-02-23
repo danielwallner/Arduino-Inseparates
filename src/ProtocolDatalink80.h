@@ -53,29 +53,28 @@ public:
 			}
 
 			++_count;
-			uint8_t bitCount = _count > 8 ? _count - 9 : _count;
 			uint8_t bitVal = 1;
-			if (bitCount == 0)
+			if (_count == 0)
 			{
 				bitVal = 0;
 			}
-			else if (bitCount < 8)
+			else if (_count < 8)
 			{
-				uint8_t bitnum = 7 - bitCount;
+				uint8_t bitnum = 7 - _count;
 				bitVal = (_data >> bitnum) & 1;
 				bitVal = bitVal ? 0 : 1;
 			}
 
-			if (bitCount == 8 && sent > 1 && sentValue == 1)
+			if (_count == 8 && sent > 1 && sentValue == 1)
 			{
 				// Prevent overflow.
 				_sendRepeatSpace = true;
 				return sent * kBitWidthMicros;
 			}
 
-			if (_count >= 18)
+			if (_count >= 9)
 			{
-				if (_count == 18)
+				if (_count == 9)
 				{
 					break;
 				}
@@ -94,7 +93,7 @@ public:
 				break;
 			}
 
-			sent += bitCount == 8 ? 8 : 1;
+			sent += _count == 8 ? 8 : 1;
 		}
 		return sent * kBitWidthMicros;
 	}

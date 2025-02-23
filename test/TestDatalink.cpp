@@ -19,39 +19,39 @@ TEST(TxTest, Datalink80)
 	TxDatalink80 tx1(&pinWriter, LOW);
 	tx1.prepare(0x0);
 	Scheduler::run(&tx1);
-	std::array<uint8_t, 4> ws1 { 0, 1, 0, 1 };
+	std::array<uint8_t, 2> ws1 { 0, 1 };
 	EXPECT_THAT(ws1, testing::ElementsAreArray(g_digitalWriteStateLog[pin]));
-	std::array<uint32_t, 4> wt1 { 0, 3125, 46875, 3125 };
+	std::array<uint32_t, 2> wt1 { 0, 3125 };
 	EXPECT_THAT(wt1, testing::ElementsAreArray(g_digitalWriteTimeLog[pin]));
-	EXPECT_EQ(100000, totalDelay());
+	EXPECT_EQ(50000, totalDelay());
 
 	resetLogs();
 	TxDatalink80 tx2(&pinWriter, LOW);
 	tx2.prepare(0x4A);
 	Scheduler::run(&tx2);
-	std::array<uint8_t, 12> ws2 { 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1 };
+	std::array<uint8_t, 6> ws2 { 0, 1, 0, 1, 0, 1, };
 	EXPECT_THAT(ws2, testing::ElementsAreArray(g_digitalWriteStateLog[pin]));
-	std::array<uint32_t, 12> wt2 { 0, 6250, 6250, 3125, 3125, 3125, 28125, 6250, 6250, 3125, 3125, 3125 };
+	std::array<uint32_t, 6> wt2 { 0, 6250, 6250, 3125, 3125, 3125 };
 	EXPECT_THAT(wt2, testing::ElementsAreArray(g_digitalWriteTimeLog[pin]));
-	EXPECT_EQ(100000, totalDelay());
+	EXPECT_EQ(50000, totalDelay());
 
 	// All ones
 	resetLogs();
 	TxDatalink80 tx3(&pinWriter, LOW);
 	tx3.prepare(0x7F);
 	Scheduler::run(&tx3);
-	std::array<uint8_t, 4> ws3 { 0, 1, 0, 1 };
+	std::array<uint8_t, 2> ws3 { 0, 1 };
 	EXPECT_THAT(ws3, testing::ElementsAreArray(g_digitalWriteStateLog[pin]));
-	std::array<uint32_t, 4> wt3 { 0, 25000, 25000, 25000 };
+	std::array<uint32_t, 2> wt3 { 0, 25000 };
 	EXPECT_THAT(wt3, testing::ElementsAreArray(g_digitalWriteTimeLog[pin]));
-	EXPECT_EQ(100000, totalDelay());
+	EXPECT_EQ(50000, totalDelay());
 
 	// Repeat
 	resetLogs();
 	Scheduler::run(&tx3);
 	EXPECT_THAT(ws3, testing::ElementsAreArray(g_digitalWriteStateLog[pin]));
 	EXPECT_THAT(wt3, testing::ElementsAreArray(g_digitalWriteTimeLog[pin]));
-	EXPECT_EQ(100000, totalDelay());
+	EXPECT_EQ(50000, totalDelay());
 }
 
 TEST(RxTest, Datalink80)
