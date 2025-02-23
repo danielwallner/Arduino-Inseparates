@@ -1,0 +1,10 @@
+{
+  "name": "Technics SL-Q33",
+  "group": "Workspace",
+  "hostname": "workspace",
+  "buttons": [
+    {"label": "⏼︎", "command": {"protocol_name": "SWITCH_TOGGLE", "bus": 8}},
+    {"label": "▶ ⏹", "command": {"bus": 0, "value": 100, "protocol_name": "PULSE"}},
+    {"label": "CUEING", "command": {"bus": 1, "value": 100, "protocol_name": "PULSE"}}
+  ]
+}

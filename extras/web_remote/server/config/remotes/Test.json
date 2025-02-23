@@ -1,0 +1,46 @@
+{
+  "name":"Test",
+  "buttons":[
+    {"label":"SWITCH TOGGLE","command":{"protocol_name":"SWITCH_TOGGLE","bus":12}},
+    {"label":"SWITCH SET 1","command":{"bus":2,"value":1,"protocol_name":"SWITCH"}},
+    {"label":"SWITCH SET 0","command":{"bus":2,"value":0,"protocol_name":"SWITCH"}},
+
+    {"label":"TECHNICS SC","command":{"hex":"0x00940001","protocol_name":"TECHNICS_SC"}},
+    {"label":"PULSE 0","command":{"bus":0,"value":200,"protocol_name":"PULSE"}},
+    {"label":"PULSE 1","command":{"bus":1,"value":200,"protocol_name":"PULSE"}},
+
+    {"label":"IR RC5","command":{"protocol_name":"RC5","bits":12,"hex":"0x340D","repeat":2}},
+    {"label":"IC RC5","command":{"bus":1,"protocol":1,"bits":12,"hex":"0x340D"},"repeat":2},
+    {"label":"ESI","command":{"protocol_name":"ESI","bits":36,"hex":"0x210401700"}},
+
+    {"label":"IR RC5","command":{"protocol_name":"RC5","bits":12,"address":16,"command":39,"repeat":2}},
+    {"label":"IC RC5","command":{"bus":1,"protocol":1,"bits":12,"address":16,"command":39},"repeat":2},
+    {"label":"ESI","command":{"protocol_name":"ESI","bits":28,"address":16,"command":39}},
+
+    {"label":"IR SONY","command":{"hex":"0x54","bits":12,"protocol_name":"SONY"}},
+    {"label":"IC SONY","command":{"bus":1,"hex":"0x54","bits":12,"protocol_name":"SONY","repeat":2}},
+    {"label":"IC2 SONY","command":{"bus":2,"hex":"0x54","bits":12,"protocol_name":"SONY"}},
+
+    {"label":"IR SONY","command":{"address":13,"command":75,"bits":12,"protocol_name":"SONY"}},
+    {"label":"IC SONY","command":{"bus":1,"address":13,"command":75,"bits":12,"protocol_name":"SONY","repeat":2}},
+    {"label":"IC2 SONY","command":{"bus":2,"address":13,"command":75,"bits":12,"protocol_name":"SONY"}},
+
+    {"label":"IR NEC","command":{"bits":32,"hex":"0xa5a5a5a5","protocol_name":"NEC","repeat":2}},
+    {"label":"IC NEC","command":{"bus":1,"bits":32,"hex":"0xa5a5a5a5","protocol_name":"NEC"}},
+    {"label":"IC2 NEC","command":{"bus":2,"bits":32,"hex":"0xa5a5a5a5","protocol_name":"NEC","repeat":2}},
+
+    {"label":"IR NEC","command":{"bits":32,"address":161,"command":22,"protocol_name":"NEC"}},
+    {"label":"IC NEC","command":{"bus":1,"bits":32,"address":161,"command":22,"protocol_name":"NEC"}},
+    {"label":"IC2 NEC","command":{"bus":2,"bits":32,"address":161,"command":22,"protocol_name":"NEC","repeat":2}},
+
+    {"label":"IR NEC2","command":{"bits":32,"hex":"0xa5a5a5a5","protocol_name":"NEC2"}},
+    {"label":"IC NEC2","command":{"bus":1,"bits":32,"hex":"0xa5a5a5a5","protocol_name":"NEC2"}},
+    {"label":"IC2 NEC2","command":{"bus":2,"bits":32,"hex":"0xa5a5a5a5","protocol_name":"NEC2"}},
+
+    {"label":"IR NEC2","command":{"bits":32,"address":161,"command":22,"protocol_name":"NEC2","repeat":2}},
+    {"label":"IC NEC2","command":{"bus":1,"bits":32,"address":161,"command":22,"protocol_name":"NEC2"}},
+    {"label":"IC2 NEC2","command":{"bus":2,"bits":32,"address":161,"command":22,"protocol_name":"NEC2"}},
+
+    {"label":"IR DATALINK86","command":{"bits":16,"hex":"0x10C","protocol_name":"DATALINK86"}}
+  ]
+}

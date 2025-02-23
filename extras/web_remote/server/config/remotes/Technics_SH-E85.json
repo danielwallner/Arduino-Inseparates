@@ -1,0 +1,16 @@
+{
+  "name": "Technics SH-E85",
+  "group": "Workspace",
+  "hostname": "workspace",
+  "buttons": [
+    {"label": "⏼︎", "command": {"protocol_name": "SWITCH_TOGGLE", "bus": 13}},
+    {},
+    {},
+    {"label": "PRESET", "command": {"protocol_name":"TECHNICS_SC", "hex":"0x10820001"}},
+    {"label": "⏶︎", "command": {"protocol_name":"TECHNICS_SC", "hex":"0x10840001"}},
+    {"label": "ON / FLAT", "command": {"protocol_name":"TECHNICS_SC", "hex":"0x108F0001"}},
+    {"label": "⏴", "command": {"protocol_name":"TECHNICS_SC", "hex":"0x10870001"}},
+    {"label": "⏷︎", "command": {"protocol_name":"TECHNICS_SC", "hex":"0x10850001"}},
+    {"label": "⏵", "command": {"protocol_name":"TECHNICS_SC", "hex":"0x10860001"}}
+  ]
+}

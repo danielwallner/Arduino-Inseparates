@@ -1,0 +1,19 @@
+{
+  "server": {
+    "port": 3666
+  },
+  "mqtt": {
+    "enabled": true,
+    "url": "mqtt://192.168.6.66",
+    "statusTopic": "inseparates/status/#",
+    "receiveTopic": "inseparates/commands/IRtoMQTT",
+    "sendTopic": "inseparates/commands/MQTTtoIR"
+  },
+  "websocket": {
+    "enabled": true,
+    "urls": [
+      "ws://192.168.6.40/ws",
+      "ws://192.168.6.41/ws"
+    ]
+  }
+}

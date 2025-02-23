@@ -1,0 +1,9 @@
+{
+  "name": "Speakers",
+  "group": "Workspace",
+  "hostname": "workspace",
+  "columns": 1,
+  "buttons": [
+    {"label": "⏼︎", "command": {"protocol_name": "SWITCH_TOGGLE", "bus": 14}}
+  ]
+}

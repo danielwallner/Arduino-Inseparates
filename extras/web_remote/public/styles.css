@@ -1,0 +1,183 @@
+body {
+  font-family: Arial, sans-serif;
+  margin: 20px;
+}
+
+#tabs {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  align-items: center;
+  gap: 10px;
+  padding: 0px;
+  background-color: #ddd;
+  border-bottom: 2px solid #aaa;
+  width: 100%;
+  position: fixed;
+  top: 0;
+  left: 0;
+  z-index: 1000;
+}
+
+#tab-container {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 10px;
+  padding: 10px 0;
+}
+
+#tab-container button {
+  font-size: 16px;
+  padding: 10px 18px;
+  border: 2px solid #444;
+  border-radius: 6px;
+  background-color: #e0e0e0;
+  cursor: pointer;
+  transition: background 0.3s, transform 0.1s;
+  min-width: 120px;
+  flex: 1 1 auto;
+  text-align: center;
+}
+
+#tab-container button.active {
+  background-color: #444;
+  color: white;
+  font-weight: bold;
+  border-color: #222;
+}
+
+#tab-container button:hover {
+  background-color: #ccc;
+}
+
+#tab-container button:active {
+  transform: scale(0.95);
+  background-color: #555;
+}
+
+#tab-spacer {
+  display: block;
+  width: 100%;
+  height: auto;
+  min-height: 50px;
+}
+
+/* Fix for iPhone: Ensure height updates dynamically */
+@supports (-webkit-touch-callout: none) {
+  #tab-spacer {
+    min-height: 5vh; /* Adjusts dynamically based on screen size */
+  }
+}
+
+/* Increase min-height for smaller screens (mobile) */
+@media (max-width: 768px) {
+  #tab-spacer {
+    min-height: auto;
+    height: 0px; /* Let JavaScript dynamically set the height */
+  }
+}
+
+.status {
+  display: inline-block;
+  margin-left: 10px;
+  padding: 5px 10px;
+  border-radius: 12px;
+  font-size: 14px;
+  color: white;
+  font-weight: bold;
+  text-align: center;
+  border: 1px solid transparent;
+  box-shadow: none;
+}
+
+.status.connected {
+  background-color: #28a745;
+  border-color: #218838;
+}
+
+.status.disconnected {
+  background-color: #dc3545;
+  border-color: #c82333;
+}
+
+#remote-container {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 20px;
+  justify-content: center;
+}
+
+.remote {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(80px, 1fr));
+  gap: 10px;
+  padding: 20px;
+  border: 2px solid #333;
+  border-radius: 10px;
+  background-color: #f5f5f5;
+}
+
+.remote h2 {
+  font-size: 18px;
+  margin-bottom: 10px;
+  text-align: center;
+}
+
+.remote button {
+  padding: 10px; /* Space inside buttons */
+  font-size: 14px; /* Reduce font size slightly for better fit */
+  border: 2px solid #333;
+  border-radius: 5px;
+  cursor: pointer;
+  background-color: #fff;
+  width: 100%; /* Ensure buttons take full grid column width */
+  height: 55px;
+  box-sizing: border-box; /* Include padding in size calculations */
+  text-align: center; /* Center-align text */
+  word-wrap: break-word; /* Wrap long text onto multiple lines */
+  white-space: normal; /* Allow text to break into multiple lines */
+}
+
+.remote button:hover {
+  background-color: #ddd;
+}
+
+.remote button:active {
+  background-color: #af0000;
+  color: white;
+  border-color: #500000;
+  transform: scale(0.95);
+}
+
+.dummy {
+  background-color: transparent; /* Invisible placeholder */
+  border: none;
+  height: 55px; /* Match button height */
+  width: 100%; /* Match grid column width */
+}
+
+#log {
+  padding: 10px;
+  border: 1px solid #ccc;
+  background-color: #fff;
+  max-height: none;
+  overflow-y: visible;
+}
+
+#log div {
+  margin-bottom: 5px;
+}
+
+#active-clients {
+  margin-top: 20px;
+  padding: 10px;
+  border: 1px solid #aaa;
+  background-color: #eaeaea;
+}
+
+#active-clients .client {
+  margin-bottom: 10px;
+  padding: 5px;
+  border-bottom: 1px solid #ccc;
+}

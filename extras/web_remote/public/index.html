@@ -1,0 +1,33 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Remote IR Control</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+
+  <!-- Tab Navigation -->
+  <div id="tabs">
+    <div id="tab-container"></div>
+  </div>
+
+  <!-- Dynamic Spacer to Adjust Content Below Tabs -->
+  <div id="tab-spacer"></div>
+
+  <div id="log-container" style="display: none;">
+    <h2>Status</h2>
+    <span id="status" class="status disconnected">Disconnected</span>
+
+    <h2>Active Instances</h2>
+    <div id="active-clients"></div>
+
+    <h2>Log</h2>
+    <div id="log"></div>
+  </div>
+
+  <div id="remote-container" style="display: none;"></div>
+
+  <script src="app.js"></script>
+</body>

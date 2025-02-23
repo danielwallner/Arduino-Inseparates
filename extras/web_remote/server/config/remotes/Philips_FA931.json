@@ -1,0 +1,19 @@
+{
+  "name": "Philips FA-931",
+  "group": "Workspace",
+  "hostname": "workspace",
+  "buttons": [
+    {"label": "⏼︎", "command": {"protocol_name": "SWITCH_TOGGLE", "bus": 12}},
+    {"label": "Mute", "command": {"protocol_name": "ESI", "address": 16, "command": 13}},
+    {"label": "⏶︎", "command": {"protocol_name": "ESI", "address": 16, "command": 16, "repeat": -1}},
+    {"label": "SPEAKER A", "command": {"protocol_name": "ESI", "address": 16, "command": 35}},
+    {"label": "SPEAKER B", "command": {"protocol_name": "ESI", "address": 16, "command": 39}},
+    {"label": "⏷︎", "command": {"protocol_name": "ESI", "address": 16, "command": 17, "repeat": -1}},
+    {"label": "CD", "command": {"protocol_name": "ESI", "bits": 36, "hex":"0x210401400"}},
+    {"label": "DCC", "command": {"protocol_name": "ESI", "bits": 36, "hex":"0x210401700"}},
+    {"label": "TV / AUX", "command": {"protocol_name": "ESI", "bits": 36, "hex":"0x210401300"}},
+    {"label": "TUNER", "command": {"protocol_name": "ESI", "bits": 36, "hex":"0x210401600"}},
+    {"label": "PHONO", "command": {"protocol_name": "ESI", "bits": 36, "hex":"0x210401500"}},
+    {"label": "TAPE", "command": {"protocol_name": "ESI", "bits": 36, "hex":"0x210401200"}}
+  ]
+}

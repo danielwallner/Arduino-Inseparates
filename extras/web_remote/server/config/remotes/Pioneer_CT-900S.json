@@ -1,0 +1,24 @@
+{
+  "name": "Pioneer CT-900S",
+  "group": "Workspace",
+  "hostname": "workspace",
+  "columns": 4,
+  "buttons": [
+    {"label": "⏼︎", "command": {"protocol_name": "SWITCH_TOGGLE", "bus": 9}},
+    {},
+    {},
+    {},
+    {"label": "⏮︎", "command": {"protocol_name": "NEC", "bus": 1, "address": 161, "command": 17, "repeat": -1}},
+    {"label": "▶", "command": {"protocol_name": "NEC", "bus": 1, "address": 161, "command": 23}},
+    {"label": "⏹", "command": {"protocol_name": "NEC", "bus": 1, "address": 161, "command": 22}},
+    {"label": "⏭︎", "command": {"protocol_name": "NEC", "bus": 1, "address": 161, "command": 16, "repeat": -1}},
+    {"label": "⏺︎ ⏸︎", "command": {"protocol_name": "NEC", "bus": 1, "address": 161, "command": 20}},
+    {"label": "⏸︎", "command": {"protocol_name": "NEC", "bus": 1, "address": 161, "command": 48}},
+    {"label": "⏺︎ MUTE", "command": {"protocol_name": "NEC", "bus": 1, "address": 161, "command": 18}},
+    {"label": "MONITOR", "command": {"protocol_name": "NEC", "bus": 1, "address": 161, "command": 29}},
+    {"label": "⏏︎", "command": {"protocol_name": "NEC", "bus": 1, "address": 161, "command": 82}},
+    {"label": "TAPE RETURN", "command": {"protocol_name": "NEC", "bus": 1, "address": 161, "command": 78}},
+    {"label": "COUNTER RESET", "command": {"protocol_name": "NEC", "bus": 1, "address": 161, "command": 72}},
+    {"label": "COUNTER MODE", "command": {"protocol_name": "NEC", "bus": 1, "address": 161, "command": 71}}
+  ]
+}

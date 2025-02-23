@@ -1,0 +1,30 @@
+{
+  "name": "Beocord 7000",
+  "group": "Living Room",
+  "hostname": "Beo_IC",
+  "buttons": [
+    {"label": "STANDBY", "command": {"protocol_name": "DATALINK80", "bus": 1, "hex": "0x1B", "repeat":1}},
+    {},
+    {"label": "OPEN / CLOSE", "command": {"protocol_name": "DATALINK80", "bus": 1, "hex": "0x3D", "repeat":1}},
+    {"label": "1", "command": [{"protocol_name": "DATALINK80", "bus": 1, "hex": "0x4C", "repeat":1},{"protocol_name": "DATALINK80", "bus": 1, "hex": "0x03", "repeat":1},{"protocol_name": "DATALINK80", "bus": 1, "hex": "0x29", "repeat":1}]},
+    {"label": "2", "command": [{"protocol_name": "DATALINK80", "bus": 1, "hex": "0x4C", "repeat":1},{"protocol_name": "DATALINK80", "bus": 1, "hex": "0x05", "repeat":1},{"protocol_name": "DATALINK80", "bus": 1, "hex": "0x29", "repeat":1}]},
+    {"label": "3", "command": [{"protocol_name": "DATALINK80", "bus": 1, "hex": "0x4C", "repeat":1},{"protocol_name": "DATALINK80", "bus": 1, "hex": "0x07", "repeat":1},{"protocol_name": "DATALINK80", "bus": 1, "hex": "0x29", "repeat":1}]},
+    {"label": "4", "command": [{"protocol_name": "DATALINK80", "bus": 1, "hex": "0x4C", "repeat":1},{"protocol_name": "DATALINK80", "bus": 1, "hex": "0x09", "repeat":1},{"protocol_name": "DATALINK80", "bus": 1, "hex": "0x29", "repeat":1}]},
+    {"label": "5", "command": [{"protocol_name": "DATALINK80", "bus": 1, "hex": "0x4C", "repeat":1},{"protocol_name": "DATALINK80", "bus": 1, "hex": "0x0B", "repeat":1},{"protocol_name": "DATALINK80", "bus": 1, "hex": "0x29", "repeat":1}]},
+    {"label": "6", "command": [{"protocol_name": "DATALINK80", "bus": 1, "hex": "0x4C", "repeat":1},{"protocol_name": "DATALINK80", "bus": 1, "hex": "0x0D", "repeat":1},{"protocol_name": "DATALINK80", "bus": 1, "hex": "0x29", "repeat":1}]},
+    {"label": "7", "command": [{"protocol_name": "DATALINK80", "bus": 1, "hex": "0x4C", "repeat":1},{"protocol_name": "DATALINK80", "bus": 1, "hex": "0x0E", "repeat":1},{"protocol_name": "DATALINK80", "bus": 1, "hex": "0x29", "repeat":1}]},
+    {"label": "8", "command": [{"protocol_name": "DATALINK80", "bus": 1, "hex": "0x4C", "repeat":1},{"protocol_name": "DATALINK80", "bus": 1, "hex": "0x0B", "repeat":1},{"protocol_name": "DATALINK80", "bus": 1, "hex": "0x29", "repeat":1}]},
+    {"label": "9", "command": [{"protocol_name": "DATALINK80", "bus": 1, "hex": "0x4C", "repeat":1},{"protocol_name": "DATALINK80", "bus": 1, "hex": "0x07", "repeat":1},{"protocol_name": "DATALINK80", "bus": 1, "hex": "0x29", "repeat":1}]},
+    {"label": "TURN", "command": {"protocol_name": "DATALINK80", "bus": 1, "hex": "0x32", "repeat":1}},
+    {"label": "0", "command": [{"protocol_name": "DATALINK80", "bus": 1, "hex": "0x4C", "repeat":1},{"protocol_name": "DATALINK80", "bus": 1, "hex": "0x01", "repeat":1},{"protocol_name": "DATALINK80", "bus": 1, "hex": "0x29", "repeat":1}]},
+    {"label": "AUTO REV", "command": {"protocol_name": "DATALINK80", "bus": 1, "hex": "0x38", "repeat":1}},
+    {"label": "⏮︎", "command": {"protocol_name": "DATALINK80", "bus": 1, "hex": "0x33", "repeat":1}},
+    {"label": "⏭︎", "command": {"protocol_name": "DATALINK80", "bus": 1, "hex": "0x19", "repeat":1}},
+    {"label": "▶", "command": {"protocol_name": "DATALINK80", "bus": 1, "hex": "0x2B", "repeat":1}},
+    {"label": "⏪", "command": {"protocol_name": "DATALINK80", "bus": 1, "hex": "0x2F", "repeat":1}},
+    {"label": "⏩", "command": {"protocol_name": "DATALINK80", "bus": 1, "hex": "0x31", "repeat":1}},
+    {"label": "⏹", "command": {"protocol_name": "DATALINK80", "bus": 1, "hex": "0x35", "repeat":1}},
+    {"label": "DOLBY", "command": {"protocol_name": "DATALINK80", "bus": 1, "hex": "0x36", "repeat":1}},
+    {"label": "DISPLAY", "command": {"protocol_name": "DATALINK80", "bus": 1, "hex": "0x40", "repeat":1}}
+  ]
+}
