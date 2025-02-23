@@ -10,12 +10,10 @@
 #endif
 #ifdef UNIT_TEST
 #include <assert.h>
-#else
-#if defined(ESP8266) || defined(ESP32)
-#define USE_FUNCTIONAL_INTERRUPT 1
+#elif defined(ESP8266) || defined(ESP32)
+#define USE_FUNCTIONAL_INTERRUPT 0
 #include <functional>
 #include <FunctionalInterrupt.h>
-#endif
 #endif
 
 #ifndef INS_SEQUENCER_MAX_NUM_TASKS
@@ -58,8 +56,10 @@
 #define INS_STR_(v) #v
 #define INS_STR(v) INS_STR_(v)
 
-#ifdef ICACHE_RAM_ATTR
-#define INS_IRAM_ATTR ICACHE_RAM_ATTR
+#if defined(ARDUINO_ISR_ATTR)
+#define INS_IRAM_ATTR ARDUINO_ISR_ATTR
+#elif defined(IRAM_ATTR)
+#define INS_IRAM_ATTR IRAM_ATTR
 #else
 #define INS_IRAM_ATTR
 #endif
@@ -147,7 +147,6 @@ public:
 		uint8_t nextWritePos = (currentWritePos + 1) % N;
 		_writePos.store(nextWritePos, std::memory_order_release);
 	}
-
 	INS_IRAM_ATTR bool empty() const
 	{
 		return _readPos.load(std::memory_order_relaxed) == _writePos.load(std::memory_order_acquire);
@@ -166,6 +165,20 @@ public:
 };
 #endif
 
+extern "C"
+{
+INS_IRAM_ATTR void pinISR0();
+INS_IRAM_ATTR void pinISR1();
+INS_IRAM_ATTR void pinISR2();
+#ifndef AVR
+INS_IRAM_ATTR void pinISR3();
+INS_IRAM_ATTR void pinISR4();
+INS_IRAM_ATTR void pinISR5();
+INS_IRAM_ATTR void pinISR6();
+INS_IRAM_ATTR void pinISR7();
+#endif
+}
+
 // Input polling and task scheduling
 class Scheduler
 {
@@ -176,7 +189,6 @@ public:
 		virtual void SchedulerDelegate_done(SteppedTask *task) = 0;
 	};
 
-private:
 	struct InputData
 	{
 		ins_micros_t micros;
@@ -194,16 +206,18 @@ private:
 		Scheduler *_scheduler;
 		uint8_t _pin;
 	public:
+#if !(UNIT_TEST || USE_FUNCTIONAL_INTERRUPT)
+		static uint8_t s_pinUsage[MAX_PIN_CALLBACKS];
+#endif
 		PinStatePusher(Scheduler *scheduler, uint8_t pin) : _scheduler(scheduler), _pin(pin)
 		{
-#ifdef UNIT_TEST
-			attachInterrupt(pin, std::bind(&PinStatePusher::pinISR, this), 0);
-#elif USE_FUNCTIONAL_INTERRUPT
+#if UNIT_TEST || USE_FUNCTIONAL_INTERRUPT
 			attachInterrupt(digitalPinToInterrupt(_pin), std::bind(&PinStatePusher::pinISR, this), CHANGE);
 #else
 			schedulerInstance(_scheduler);
 
-			for (uint8_t i = 0; i < MAX_PIN_CALLBACKS; ++i)
+			uint8_t i = 0;
+			for (; i < MAX_PIN_CALLBACKS; ++i)
 			{
 				if (s_pinUsage[i] == (uint8_t)-1)
 				{
@@ -211,30 +225,31 @@ private:
 					void (*isr)();
 					switch (i)
 					{
-					case 0: isr = pinISR0;
-					case 1: isr = pinISR1;
-					case 2: isr = pinISR2;
+					case 0: isr = pinISR0; break;
+					case 1: isr = pinISR1; break;
+					case 2: isr = pinISR2; break;
 #ifndef AVR
-					case 3: isr = pinISR3;
-					case 4: isr = pinISR4;
-					case 5: isr = pinISR5;
-					case 6: isr = pinISR6;
-					case 7: isr = pinISR7;
+					case 3: isr = pinISR3; break;
+					case 4: isr = pinISR4; break;
+					case 5: isr = pinISR5; break;
+					case 6: isr = pinISR6; break;
+					case 7: isr = pinISR7; break;
 #endif
+					default: InsError(*(uint32_t*)"icnt");
 					}
 					attachInterrupt(digitalPinToInterrupt(_pin), isr, CHANGE);
+					break;
 				}
 			}
+			if (i == MAX_PIN_CALLBACKS)
+				InsError(*(uint32_t*)"insp");
 #endif
 		}
 		~PinStatePusher()
 		{
-#ifdef UNIT_TEST
-			detachInterrupt(_pin);
-#elif USE_FUNCTIONAL_INTERRUPT
 			detachInterrupt(digitalPinToInterrupt(_pin));
-#else
-			for (uint8_t i; i < MAX_PIN_CALLBACKS; ++i)
+#if !(UNIT_TEST || USE_FUNCTIONAL_INTERRUPT)
+			for (uint8_t i = 0; i < MAX_PIN_CALLBACKS; ++i)
 			{
 				if (s_pinUsage[i] == _pin)
 				{
@@ -248,7 +263,7 @@ private:
 		uint8_t pin() { return _pin; }
 
 #if UNIT_TEST || USE_FUNCTIONAL_INTERRUPT
-		INS_IRAM_ATTR void pinISR()
+		/*INS_IRAM_ATTR*/ void pinISR()
 		{
 			auto &inputFifo = _scheduler->_inputFIFO;
 			auto &w = inputFifo.writeRef();
@@ -257,29 +272,7 @@ private:
 			w.state = digitalRead(_pin);
 			inputFifo.push();
 		}
-#else
-		static uint8_t s_pinUsage[MAX_PIN_CALLBACKS];
-
-		INS_IRAM_ATTR static void pinISR0() { pinISRCommon(s_pinUsage[0]); }
-		INS_IRAM_ATTR static void pinISR1() { pinISRCommon(s_pinUsage[1]); }
-		INS_IRAM_ATTR static void pinISR2() { pinISRCommon(s_pinUsage[2]); }
-#ifndef AVR
-		INS_IRAM_ATTR static void pinISR3() { pinISRCommon(s_pinUsage[3]); }
-		INS_IRAM_ATTR static void pinISR4() { pinISRCommon(s_pinUsage[4]); }
-		INS_IRAM_ATTR static void pinISR5() { pinISRCommon(s_pinUsage[5]); }
-		INS_IRAM_ATTR static void pinISR6() { pinISRCommon(s_pinUsage[6]); }
-		INS_IRAM_ATTR static void pinISR7() { pinISRCommon(s_pinUsage[7]); }
 #endif
-		INS_IRAM_ATTR static void pinISRCommon(uint8_t pin)
-		{
-			auto &inputFifo = schedulerInstance()->_inputFIFO;
-			auto &w = inputFifo.writeRef();
-			w.micros = fastMicros();
-			w.pin = pin;
-			w.state = digitalRead(pin);
-			inputFifo.push();
-		}
-
 		INS_IRAM_ATTR static Scheduler *schedulerInstance(Scheduler *inst = nullptr)
 		{
 			static Scheduler *s_instance;
@@ -287,9 +280,9 @@ private:
 				s_instance = inst;
 			return s_instance;
 		}
-#endif
 	};
 
+private:
 	friend class PinStatePusher;
 
 #if INS_SEQUENCER_MAX_NUM_TASKS <= 8
@@ -364,7 +357,15 @@ private:
 public:
 	Scheduler()
 	{
+#if !(UNIT_TEST || USE_FUNCTIONAL_INTERRUPT)
+		for (uint8_t i = 0; i < MAX_PIN_CALLBACKS; ++i)
+		{
+			PinStatePusher::s_pinUsage[i] = (uint8_t)-1;
+		}
+#endif
 	}
+
+	INS_IRAM_ATTR LockFreeFIFO<InputData, INS_INPUT_FIFO_LENGTH> &inputFIFO() { return _inputFIFO; };
 
 	void begin()
 	{

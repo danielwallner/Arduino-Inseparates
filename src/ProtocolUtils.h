@@ -61,11 +61,11 @@ public:
 	OpenDrainPinWriter(uint8_t pin, uint8_t onState, uint8_t offMode = INPUT) :
 		_pin(pin), _onState(onState), _offMode(offMode)
 	{
-		pinMode(pin, _offMode);
 		if (_offMode == OUTPUT)
 			digitalWrite(pin, onState ? 0 : 1);
 		else
 			digitalWrite(pin, onState);
+		pinMode(pin, _offMode);
 	}
 
 	void write(uint8_t value) override
@@ -391,6 +391,8 @@ public:
 };
 
 #if (INS_HAVE_HW_TIMER || UNIT_TEST) && INS_OUTPUT_FIFO_CHANNEL_COUNT
+INS_IRAM_ATTR void timerISR();
+
 class InterruptWriteScheduler : public SteppedTask
 {
 	friend class InterruptPinWriter;
@@ -410,7 +412,9 @@ class InterruptWriteScheduler : public SteppedTask
 		uint8_t mode;
 	};
 
+public:
 	uint16_t _pollIntervalMicros;
+private:
 	LockFreeFIFO<OutputData, INS_OUTPUT_FIFO_LENGTH> _outputFIFO[INS_OUTPUT_FIFO_CHANNEL_COUNT];
 	OutputData *_writeRef;
 	TaskData _outputFIFO_current[INS_OUTPUT_FIFO_CHANNEL_COUNT];
@@ -425,10 +429,14 @@ public:
 	{
 		instance(this);
 		memset(_outputFIFO_current, 0, sizeof(_outputFIFO_current));
+	}
+
+	void begin()
+	{
 #ifdef UNIT_TEST
-		attachInterruptInterval(pollIntervalMicros, timerISR);
+		attachInterruptInterval(_pollIntervalMicros, timerISR);
 #else
-		_timer.attachInterruptInterval(pollIntervalMicros, timerISR);
+		_timer.attachInterruptInterval(_pollIntervalMicros, timerISR);
 #endif
 	}
 
@@ -470,15 +478,20 @@ public:
 		return _pollIntervalMicros * 10;
 	}
 
-private:
+	INS_IRAM_ATTR LockFreeFIFO<OutputData, INS_OUTPUT_FIFO_LENGTH> &outputFIFO(uint8_t fifo) { return _outputFIFO[fifo]; }
+
 	INS_IRAM_ATTR static InterruptWriteScheduler *instance(InterruptWriteScheduler *timer = nullptr)
 	{
 		static InterruptWriteScheduler *s_instance;
 		if (timer)
+		{
+			INS_ASSERT(!s_instance);
 			s_instance = timer;
+		}
 		return s_instance;
 	}
 
+private:
 	bool activate(TaskData &td)
 	{
 		for (uint8_t i = 0; i < INS_OUTPUT_FIFO_CHANNEL_COUNT; ++i)
@@ -570,46 +583,6 @@ private:
 		_writeRef->mode = mode;
 		_writeRef = nullptr;
 	}
-
-	INS_IRAM_ATTR static void timerISR()
-	{
-		InterruptWriteScheduler *s_this = instance();
-		for (uint8_t i = 0; i < INS_OUTPUT_FIFO_CHANNEL_COUNT; ++i)
-		{
-			auto &fifo = s_this->_outputFIFO[i];
-			if (fifo.empty())
-			{
-				continue;
-			}
-			ins_micros_t now = fastMicros();
-			auto &r = fifo.readRef();
-			ins_micros_t targetMicros = r.micros;
-			ins_smicros_t timeLeft = targetMicros - now;
-			if (timeLeft > s_this->_pollIntervalMicros / 2)
-			{
-				continue;
-			}
-			uint8_t pin = r.pin;
-			if (pin == (uint8_t)-1)
-			{
-				fifo.pop();
-				continue;
-			}
-			uint8_t state = r.state;
-			uint8_t mode = r.mode;
-			fifo.pop();
-			if (mode == OUTPUT)
-			{
-				digitalWrite(pin, state);
-				pinMode(pin, mode);
-			}
-			else
-			{
-				pinMode(pin, mode);
-				digitalWrite(pin, state);
-			}
-		}
-	}
 };
 
 // offMode == OUTPUT -> push-pull.
@@ -626,9 +599,9 @@ public:
 	InterruptPinWriter(InterruptWriteScheduler *scheduler, uint8_t pin, uint8_t onState = HIGH, uint8_t offMode = OUTPUT) :
 		_scheduler(scheduler), _pin(pin), _onState(onState), _offMode(offMode)
 	{
+		if (_offMode == OUTPUT)
+			digitalWrite(pin, onState ? 0 : 1);
 		pinMode(pin, _offMode);
-		if (offMode != OUTPUT)
-			digitalWrite(pin, onState);
 	}
 
 	void write(uint8_t value) override
@@ -638,7 +611,7 @@ public:
 			_scheduler->write(_pin, value, OUTPUT);
 			return;
 		}
-		_scheduler->write(_pin, _onState, _offMode);
+		_scheduler->write(_pin, value, _offMode);
 	}
 };
 #endif

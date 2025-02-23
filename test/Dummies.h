@@ -15,6 +15,8 @@
 #define INPUT 0
 #define OUTPUT 1
 
+#define CHANGE 0
+
 // In Arduino the return type of micros() is unsigned long
 // that would make it a 64-bit type on some 64-bit platforms.
 // uint32_t is returned here to avoid that.

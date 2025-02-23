@@ -184,6 +184,7 @@ void setup()
   scheduler.add(&printer);
 #if ENABLE_WRITE_TIMER
   scheduler.add(&writeScheduler);
+  writeScheduler.begin();
 #endif
 
 #ifdef INS_SAMPLE_DEBUG_PIN

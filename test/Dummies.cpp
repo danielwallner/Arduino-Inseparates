@@ -66,6 +66,7 @@ int digitalRead(uint8_t pin)
 void digitalWrite(uint8_t pin, uint8_t value)
 {
 	assert(value < 2);
+	bool change = g_pinStates[pin] != value;
 	g_pinStates[pin] = value;
 	g_digitalWriteStateLog[pin].push_back(value);
 	if (g_digitalWriteTimeLog[pin].size())
@@ -79,7 +80,7 @@ void digitalWrite(uint8_t pin, uint8_t value)
 	}
 	g_lastWrite[pin] = micros();
 
-	if (g_pinInterrupts.count(pin))
+	if (change && g_pinInterrupts.count(pin))
 		g_pinInterrupts[pin]();
 }
 

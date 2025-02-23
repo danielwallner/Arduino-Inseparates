@@ -163,10 +163,11 @@ int main()
                 _data(data),
                 _writeScheduler(5),
                 _pin(pin),
-                _pinWriter(&_writeScheduler, pin),
+                _pinWriter(&_writeScheduler, pin, LOW),
                 _tx1(&_pinWriter, HIGH)
             {
                 _scheduler.add(&_writeScheduler);
+                _writeScheduler.begin();
 
                 _tx1.setBaudrate(baudRate);
                 _tx1.setFormat(Parity::kOdd, bits);
