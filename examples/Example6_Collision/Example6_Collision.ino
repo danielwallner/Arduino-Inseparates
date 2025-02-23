@@ -52,8 +52,8 @@ static const uint8_t D_10 = 10;
 #define INPUT_PULLDOWN INPUT
 #endif
 
-const uint16_t kESIPin = D_4;
-const uint16_t kJamPin = D_5;
+const uint16_t kESIPin = D_8;
+const uint16_t kJamPin = D_7;
 
 #define ACTIVE HIGH
 #define MIN_SPACE_AFTER_SEND_MICROS 20000
