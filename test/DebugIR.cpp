@@ -104,7 +104,7 @@ int main()
 		TxDatalink80 tx1(&pinWriter, LOW);
 		tx1.prepare(0x0);
 		Scheduler::run(&tx1);
-		assert(100000 == totalDelay());
+		assert(50000 == totalDelay());
 	}
 	{
 		class Delegate : public RxDatalink80::Delegate
@@ -145,10 +145,9 @@ int main()
 			datalinkDecoder.Decoder_pulse(1 ^ g_digitalWriteStateLog[pin][i], g_digitalWriteTimeLog[pin][i]);
 		}
 		datalinkDecoder.Decoder_timeout(g_digitalWriteStateLog[pin].back());
-		assert(totalDelay() - datalinkStartDelay == 100000);
-		assert(delegate.receivedData.size() == 2 &&
-			   delegate.receivedData[0] == data &&
-			   delegate.receivedData[1] == data);
+		assert(totalDelay() - datalinkStartDelay == 50000);
+		assert(delegate.receivedData.size() == 1 &&
+			   delegate.receivedData[0] == data);
 
 		data = 0x0;
 		resetLogs();
@@ -161,10 +160,9 @@ int main()
 			datalinkDecoder.Decoder_pulse(1 ^ g_digitalWriteStateLog[pin][i], g_digitalWriteTimeLog[pin][i]);
 		}
 		datalinkDecoder.Decoder_timeout(g_digitalWriteStateLog[pin].back());
-		assert(totalDelay() - datalinkStartDelay == 100000);
-		assert(delegate.receivedData.size() == 4 &&
-			   delegate.receivedData[2] == data &&
-			   delegate.receivedData[3] == data);
+		assert(totalDelay() - datalinkStartDelay == 50000);
+		assert(delegate.receivedData.size() == 2 &&
+			   delegate.receivedData[1] == data);
 
 		data = 0x7F;
 		resetLogs();
@@ -177,10 +175,9 @@ int main()
 			datalinkDecoder.Decoder_pulse(1 ^ g_digitalWriteStateLog[pin][i], g_digitalWriteTimeLog[pin][i]);
 		}
 		datalinkDecoder.Decoder_timeout(g_digitalWriteStateLog[pin].back());
-		assert(totalDelay() - datalinkStartDelay == 100000);
-		assert(delegate.receivedData.size() == 6 &&
-			   delegate.receivedData[4] == data &&
-			   delegate.receivedData[5] == data);
+		assert(totalDelay() - datalinkStartDelay == 50000);
+		assert(delegate.receivedData.size() == 3 &&
+			   delegate.receivedData[2] == data);
 
 		data = 0x2A;
 		resetLogs();
@@ -193,10 +190,9 @@ int main()
 			datalinkDecoder.Decoder_pulse(1 ^ g_digitalWriteStateLog[pin][i], g_digitalWriteTimeLog[pin][i]);
 		}
 		datalinkDecoder.Decoder_timeout(g_digitalWriteStateLog[pin].back());
-		assert(totalDelay() - datalinkStartDelay == 100000);
-		assert(delegate.receivedData.size() == 8 &&
-			   delegate.receivedData[6] == data &&
-			   delegate.receivedData[7] == data);
+		assert(totalDelay() - datalinkStartDelay == 50000);
+		assert(delegate.receivedData.size() == 4 &&
+			   delegate.receivedData[3] == data);
 	}
 
 	// B&O Datalink 86
