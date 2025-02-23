@@ -20,11 +20,11 @@ TEST(TxTest, RC5)
 	EXPECT_EQ(0x3084, TxRC5::encodeRC5(0, 0x02, 0x04));
 	EXPECT_EQ(0x3FFF, TxRC5::encodeRC5(1, 0x1F, 0x3F));
 
-	EXPECT_EQ(0x2000, TxRC5::encodeRC5X(0, 0, 0));
-	EXPECT_EQ(0x2175, TxRC5::encodeRC5X(0, 0x05, 0x35));
-	EXPECT_EQ(0x2800, TxRC5::encodeRC5X(1, 0, 0));
-	EXPECT_EQ(0x3084, TxRC5::encodeRC5X(0, 0x02, 0x44));
-	EXPECT_EQ(0x3FFF, TxRC5::encodeRC5X(1, 0x1F, 0x7F));
+	EXPECT_EQ(0x3000, TxRC5::encodeRC5X(0, 0, 0));
+	EXPECT_EQ(0x3175, TxRC5::encodeRC5X(0, 0x05, 0x35));
+	EXPECT_EQ(0x3800, TxRC5::encodeRC5X(1, 0, 0));
+	EXPECT_EQ(0x2084, TxRC5::encodeRC5X(0, 0x02, 0x44));
+	EXPECT_EQ(0x2FFF, TxRC5::encodeRC5X(1, 0x1F, 0x7F));
 
 	resetLogs();
 	PushPullPinWriter pinWriter(pin);
