@@ -1,0 +1,163 @@
+DATALINK80:
+  7bit:
+    - name: "command"
+      bits: 7
+      values:
+        0x01: "0"
+        0x03: "1"
+        0x05: "2"
+        0x07: "3"
+        0x09: "4"
+        0x0B: "5"
+        0x0D: "6"
+        0x0F: "7"
+        0x11: "8"
+        0x13: "9"
+        0x15: "Next (Phono / CD)"
+        0x19: "Next (Tape)"
+        0x1A: "Standby (Phono / CD)"
+        0x1B: "Standby (Tape)"
+        0x29: "Play (Phono / CD)"
+        0x2B: "Play (Tape)"
+        0x2D: "Two way 1 / On? (Tape)"
+        0x2F: "<< (Tape)"
+        0x31: ">> (Tape)"
+        0x32: "Turn (Tape)"
+        0x33: "Prev (Tape)"
+        0x35: "Stop (Tape)"
+        0x36: "Dolby (Tape)"
+        0x37: "To Beomaster 1?"
+        0x38: "Auto rev (Tape)"
+        0x3C: "Set Track (Tape)"
+        0x3D: "Open (Tape)"
+        0x40: "Display (Tape)"
+        0x41: "Standby Done (Tape)"
+        0x42: "Two way 2 / On? (Tape)"
+        0x43: "To Beomaster 2?"
+        0x45: "Open / Standby Done (CD)"
+        0x47: "Two way 3 (Tape)"
+        0x4B: "Standby"
+        0x4C: "Set Track (Phono / CD)"
+        0x4D: "Stop (Phono / CD)"
+        0x51: "<< (Phono / CD)"
+        0x53: ">> (Phono / CD)"
+        0x54: "Two way 1 (CD)"
+        0x55: "Play (Phono / CD)"
+        0x56: "Two way 2 (CD)"
+        0x57: "Two way 3 (CD)"
+        0x64: "Two way handshake? (Tape)"
+        0x66: "Two way 4 (Tape)"
+        0x68: "Two way 5 (Tape)"
+        0x6A: "Two way 6 (Tape)"
+        0x6F: "Two way 7 (Tape)"
+        0x73: "Prev (Phono / CD)"
+        0x77: "Two way 4 (CD)"
+        0x7B: "Two way 5 (CD)"
+        0x7C: "END/CLEAR MSG?"
+
+DATALINK86:
+  common:
+    - name: "command"
+      values:
+        0x00: "0"
+        0x01: "1"
+        0x02: "2"
+        0x03: "3"
+        0x04: "4"
+        0x05: "5"
+        0x06: "6"
+        0x07: "7"
+        0x08: "8"
+        0x09: "9"
+        0x0C: "STANDBY"
+        0x0D: "MUTE"
+        0x1E: ">|"
+        0x1F: "|<"
+        0x32: "<<"
+        0x34: ">>"
+        0x35: "PLAY"
+        0x36: "STOP"
+        0x44: "SOUND"
+        0x60: "VOL UP"
+        0x64: "VOL DOWN"
+        0x80: "TV/AUX"
+        0x81: "RADIO"
+        0x91: "TAPE 1"
+        0x92: "CD"
+        0x93: "PHONO"
+        0x94: "TAPE 2"
+    - name: "to_address"
+      values:
+        0x01: "RADIO"
+        0x1A: "BL5000"
+        0x1E: "MCP"
+    - name: "from_address"
+      values:
+        0x1A: "BL5000"
+        0x1E: "MCP"
+  16bit:
+    - name: "to_address"
+      bits: 8
+    - name: "command"
+      bits: 8
+  21bit:
+    - name: "format"
+      bits: 3
+      variants:
+        0x2:
+          - name: "to_address"
+            bits: 5
+          - name: "from_address"
+            bits: 5
+          - name: "command"
+            bits: 8
+  26bit:
+    - name: "unknown"
+      bits: 5
+    - name: "to_address"
+      bits: 5
+    - name: "unknown"
+      bits: 8
+    - name: "source"
+      bits: 8
+      values:
+        0x80: "TV/AUX"
+        0x81: "RADIO"
+        0x91: "TAPE 1"
+        0x92: "CD"
+        0x93: "PHONO"
+        0x94: "TAPE 2"
+  34bit:
+    - name: "unknown"
+      bits: 5
+    - name: "to_address"
+      bits: 5
+    - name: "unknown1"
+      bits: 8
+    - name: "source"
+      bits: 8
+      values:
+        0x80: "TV/AUX"
+        0x81: "RADIO"
+        0x91: "TAPE 1"
+        0x92: "CD"
+        0x93: "PHONO"
+        0x94: "TAPE 2"
+    - name: "unknown2"
+      bits: 8
+  39bit:
+    - name: "unknown"
+      bits: 31
+    - name: "volume"
+      bits: 8
+  46bit:
+    - name: "unknown"
+      bits: 5
+    - name: "to_address"
+      bits: 5
+    - name: "unknown1"
+      bits: 24
+    - name: "volume"
+      bits: 8
+    - name: "unknown2"
+      bits: 4
