@@ -11,6 +11,8 @@
 // Note that one of the CONTROL S pins is +5V!
 // To make sure you don't break anything measure and check the service manual!
 
+// Note that some Sony equipment requires more than one message to react!
+
 #include "ProtocolUtils.h"
 #include "DebugUtils.h"
 
@@ -133,7 +135,7 @@ public:
 			return;
 		}
 
-		if (pinState != _mark)
+		if (pinState != _mark && _count > 2)
 		{
 			if (_delegate)
 				_delegate->RxSIRCDelegate_data(_data, _count >> 1, _bus);
