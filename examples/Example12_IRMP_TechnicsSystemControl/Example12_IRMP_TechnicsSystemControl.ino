@@ -15,10 +15,10 @@
 #define IRMP_ENABLE_PIN_CHANGE_INTERRUPT
 #define IRMP_SUPPORT_NEC_PROTOCOL 1      // Pioneer + Yamaha
 #define IRMP_SUPPORT_KASEIKYO_PROTOCOL 1 // Technics
-#define IRMP_INPUT_PIN D2
+#define IRMP_INPUT_PIN D3
 
 const uint16_t kTechnicsSCDataPin = D5;
-const uint16_t kTechnicsSCClockPin = D4;
+const uint16_t kTechnicsSCClockPin = D6;
 
 #include <irmp.hpp>
 
