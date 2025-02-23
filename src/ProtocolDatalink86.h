@@ -130,6 +130,7 @@ public:
 
 private:
 	bool _irMark;
+	bool _complete;
 	uint8_t _mark;
 	Delegate *_delegate;
 	uint8_t _lastBit;
@@ -146,6 +147,8 @@ public:
 
 	void reset()
 	{
+		_irMark = false;
+		_complete = false;
 		_lastBit = 1;
 		_data = 0;
 		_count = -1;
@@ -182,6 +185,14 @@ public:
 				reset();
 				return kInvalidTimeout;
 			}
+			if (_complete)
+			{
+				if (_complete && _delegate)
+					_delegate->RxDatalink86Delegate_data(_data, _count - 5, _bus);
+				reset();
+				_count = 0;
+				return kInvalidTimeout;
+			}
 			return kT6;
 		}
 
@@ -215,11 +226,8 @@ public:
 		}
 		if (t == 4)
 		{
-			// If this is the start of a repeat message the first mark for the next message will be swallowed.
-			// This will anyway be accepted as a new message.
-			if (_delegate)
-				_delegate->RxDatalink86Delegate_data(_data, _count - 5, _bus);
-			goto distance_error;
+			_complete = true;
+			return kT6;
 		}
 
 		if (_lastBit == 0 && t == 3)
