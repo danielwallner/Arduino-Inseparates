@@ -53,7 +53,7 @@ static const uint8_t D_10 = 10;
 #endif
 
 const uint8_t kBeo36RecvPin = D_3;
-const uint8_t kDatalink80RecvPin = D_4;
+const uint8_t kDatalink80RecvPin = D_5;
 const uint8_t kDatalink86RecvPin = D_7;
 const uint8_t kESIRecvPin = D_10;
 const uint8_t kNECRecvPin = D_3;
