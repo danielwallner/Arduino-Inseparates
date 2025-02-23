@@ -31,13 +31,13 @@
 #define SEND_BANG_OLUFSEN 1
 
 enum ins_decode_type_t {
-  ESI = 253,
+  NEC2 = 250, // NEC with full message repeat
   BEO36,
   DATALINK86,
   SWITCH = 256,
   SWITCH_TOGGLE,
-  TRIGGER,
-  NEC2, // NEC with full message repeat
+  PULSE,
+  ESI,
   DATALINK80,
   TECHNICS_SC,
 };
@@ -59,7 +59,7 @@ struct Message
   uint8_t flags;
   uint8_t logTarget;
 
-  void setValue(uint64_t value_) { value = value_;  flags |= 1; }
+  void setValue(uint64_t value_) { value = value_;  flags = 1; }
   void setAddress(uint16_t address) { value |= (uint32_t(address) << 16); flags |= 2; }
   void setCommand(uint16_t command) { value |= command; flags |= 2; }
   void setExtended(uint16_t extended) { value |= (uint64_t(extended) << 32); flags |= 4; }
@@ -83,7 +83,7 @@ struct Message
 IRrecv irrecv(kIRReceivePin);
 IRsend irsend(kIRSendPin, IR_SEND_ACTIVE == LOW);
 decode_results results;
-inseparates::LockFreeFIFO<Message, 128> irFIFO;
+inseparates::LockFreeFIFO<Message, 16> irFIFO;
 #endif
 
 void sendInseparates(Message &message);
@@ -98,7 +98,8 @@ enum decode_type_t
   NEC = 3,
   SONY,
 };
-String typeToString(const decode_type_t protocol, const bool isRepeat = false)
+
+const char* typeToString(const decode_type_t protocol, const bool isRepeat = false)
 {
   switch (protocol)
   {
@@ -121,14 +122,18 @@ decode_type_t strToDecodeType(const char *name)
 }
 #endif
 
-void received(Message &message)
+ins_decode_type_t strToDecodeTypeEx(const char *name)
 {
-  if (!message.protocol_name && message.protocol > 0 && message.protocol < SWITCH)
-  {
-    String protocol_name = typeToString((decode_type_t)message.protocol, message.repeat);
-    message.protocol_name = protocol_name.c_str();
-  }
-  publish(message);
+  if (!strcmp(name, "SWITCH")) return SWITCH;
+  else if (!strcmp(name, "SWITCH_TOGGLE")) return SWITCH_TOGGLE;
+  else if (!strcmp(name, "PULSE")) return PULSE;
+  else if (!strcmp(name, "NEC2")) return NEC2;
+  else if (!strcmp(name, "BEO36")) return BEO36;
+  else if (!strcmp(name, "ESI")) return ESI;
+  else if (!strcmp(name, "DATALINK80")) return DATALINK80;
+  else if (!strcmp(name, "DATALINK86")) return DATALINK86;
+  else if (!strcmp(name, "TECHNICS_SC")) return TECHNICS_SC;
+  return (ins_decode_type_t)UNKNOWN;
 }
 
 void dispatch(Message &message)
@@ -142,22 +147,16 @@ void dispatch(Message &message)
     }
     else
     {
-      if (!strcmp(message.protocol_name, "SWITCH")) message.protocol = SWITCH;
-      else if (!strcmp(message.protocol_name, "SWITCH_TOGGLE")) message.protocol = SWITCH_TOGGLE;
-      else if (!strcmp(message.protocol_name, "TRIGGER")) message.protocol = TRIGGER;
-      else if (!strcmp(message.protocol_name, "NEC2")) message.protocol = NEC2;
-      else if (!strcmp(message.protocol_name, "ESI")) message.protocol = ESI;
-      else if (!strcmp(message.protocol_name, "BEO36")) message.protocol = BEO36;
-      else if (!strcmp(message.protocol_name, "DATALINK80")) message.protocol = DATALINK80;
-      else if (!strcmp(message.protocol_name, "DATALINK86")) message.protocol = DATALINK86;
-      else if (!strcmp(message.protocol_name, "TECHNICS_SC")) message.protocol = TECHNICS_SC;
+      ins_decode_type_t p = strToDecodeTypeEx(message.protocol_name);
+      if (p)
+      {
+        message.protocol = p;
+      }
     }
   }
 
   if (message.bus > 0 || message.protocol >= SWITCH)
   {
-    if (message.protocol > TRIGGER && message.bus < 1)
-      message.bus = 1;
     sendInseparates(message);
   }
   else
@@ -182,12 +181,6 @@ void setupIR()
   irTimekeeper.reset();
 
   irsend.begin();
-
-  Serial.print("IR receiver active on pin ");
-  Serial.println(kIRReceivePin);
-
-  Serial.print("IR transmitter active on pin ");
-  Serial.println(kIRSendPin);
 }
 
 void loopIR()
@@ -214,7 +207,7 @@ void loopIR()
 
       irrecv.resume();
 
-      received(message);
+      publish(message);
     }
   }
 
@@ -239,6 +232,8 @@ void loopIR()
   if (repeatMessage.dummy() && irFIFO.empty())
     return;
 
+  bool repeat = !repeatMessage.dummy();
+
   const Message message = repeatMessage.dummy() ? irFIFO.readRef() : repeatMessage;
 
   if (repeatMessage.dummy())
@@ -260,26 +255,27 @@ void loopIR()
 
   bool result = false;
   uint64_t value;
-  uint8_t repeat = 0;
 
   static bool toggleRC5;
   static bool toggleRC6;
 
   if (message.addressAndCommandSet())
-    switch (message.protocol)
+  {
+    if (message.protocol == NEC || message.protocol == NEC2)
     {
-    case NEC:
       result = true;
       value = irsend.encodeNEC(message.address(), message.command());
-      irsend.sendNEC(value, message.bits, repeat);
-      break;
+      irsend.sendNEC(value, (!repeat || message.protocol != NEC) ? message.bits : 0, 0);
+    }
+    else switch (message.protocol)
+    {
     case RC5:
       result = true;
       value = irsend.encodeRC5X(message.address(), message.command());
-      toggleRC5 = !toggleRC5;
+      toggleRC5 = repeat ? toggleRC5 : !toggleRC5;
       if (toggleRC5)
         value = irsend.toggleRC5(value);
-      irsend.sendRC5(value, message.bits, repeat);
+      irsend.sendRC5(value, message.bits, 0);
       break;
     case RC6:
       result = true;
@@ -287,50 +283,60 @@ void loopIR()
       toggleRC6 = !toggleRC6;
       if (toggleRC6)
         value = irsend.toggleRC6(value);
-      irsend.sendRC6(value, message.bits, repeat);
+      irsend.sendRC6(value, message.bits, 0);
       break;
     case SONY:
       result = true;
       value = irsend.encodeSony(message.bits, message.command(), message.address(), message.extendedSet());
-      irsend.sendSony(value, message.bits, repeat);
+      irsend.sendSony(value, message.bits, 0);
       break;
     case PANASONIC:
       result = true;
       value = irsend.encodePanasonic(message.extended(), message.address() >> 8, message.address(), message.command());
-      irsend.sendPanasonic(value, message.bits, repeat);
+      irsend.sendPanasonic(value, message.bits, 0);
       break;
     case JVC:
       result = true;
       value = irsend.encodeJVC(message.address(), message.command());
-      irsend.sendJVC(value, message.bits, repeat);
+      irsend.sendJVC(value, message.bits, 0);
       break;
     case SAMSUNG:
       result = true;
       value = irsend.encodeSAMSUNG(message.address(), message.command());
-      irsend.sendSAMSUNG(value, message.bits, repeat);
+      irsend.sendSAMSUNG(value, message.bits, 0);
       break;
     case LG:
       result = true;
       value = irsend.encodeLG(message.address(), message.command());
-      irsend.sendLG(value, message.bits, repeat);
+      irsend.sendLG(value, message.bits, 0);
       break;
     //case SHARP:
     //case DENON:
     case PIONEER:
       result = true;
       value = irsend.encodePioneer(message.address(), message.command());
-      irsend.sendPioneer(value, message.bits, repeat);
+      irsend.sendPioneer(value, message.bits, 0);
       break;
     //case BANG_OLUFSEN:
     }
+  }
   else
-    result = irsend.send((decode_type_t)message.protocol, message.value, message.bits, repeat);
+  {
+    if (message.protocol == NEC || message.protocol == NEC2)
+    {
+      result = irsend.send(NEC, message.value, (!repeat || message.protocol != NEC) ? message.bits : 0, 0);
+    }
+    else
+    {
+      result = irsend.send((decode_type_t)message.protocol, message.value, message.bits, 0);
+    }
+  }
 
   if (!result)
   {
     if (!repeatMessage.dummy())
       repeatMessage.makeDummy();
-    logLine("UNHANDLED IR", repeatMessage.logTarget);
+    logLine("UNHANDLED IR", 12, (ins_log_target_t)repeatMessage.logTarget);
   }
 }
 #endif

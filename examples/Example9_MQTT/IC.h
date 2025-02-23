@@ -6,21 +6,16 @@
 #define DEBUG_FULL_TIMING 0
 #define DEBUG_CYCLE_TIMING 0
 
-#if ENABLE_IRREMOTE
-// For some reason, turning this on makes IRremoteESP8266 receive not working.
-// Turning this off lowers reliablitity and blocks reception during IRremoteESP8266 send.
-#define ENABLE_READ_INTERRUPTS false
-#else
-#define ENABLE_READ_INTERRUPTS false
-#endif
+// Currently only one of ENABLE_READ_INTERRUPTS and ENABLE_WRITE_TIMER can be enabled when ENABLE_MULTICORE is false.
+// Otherwise the interrupts might not trigger for an unknown reason!
 
 // Write timer is currently not supported for PWM output which makes IR timing less accurate
-#if defined(ESP32)
-#define ENABLE_WRITE_TIMER 1
-#else
-// IRremoteESP8266 uses the only available timer on ESP8266.
-// Ideally, this should be shared, as turning it off makes output timing accuracy worse.
+#if defined(ESP8266)
+#define ENABLE_READ_INTERRUPTS 1
 #define ENABLE_WRITE_TIMER 0
+#else
+#define ENABLE_READ_INTERRUPTS ENABLE_MULTICORE
+#define ENABLE_WRITE_TIMER 1
 #endif
 
 #if defined(CONFIG_IDF_TARGET_ESP32C3) // ESP32 C3 16 pin supermini
@@ -29,10 +24,10 @@ const uint16_t kIRSendPin = 2;
 const uint16_t kSDAPin = 8;
 const uint16_t kSCLPin = 9;
 
-#if ENABLE_TRIGGER
-#define HAVE_TRIGGER 1
-const uint16_t kTrigger0Pin = 3;
-const uint16_t kTrigger1Pin = 4;
+#if ENABLE_PULSE
+#define HAVE_PULSE 1
+const uint16_t kPulse0Pin = 3;
+const uint16_t kPulse1Pin = 4;
 #endif
 
 #if ENABLE_IR_455
@@ -48,7 +43,7 @@ Not mapped
 // Only enable Technics System Control if you really need it as it's always active and takes processing time even when idle.
 // This is also less reliable than the other receivers as it isn't using interrupts and will be blocked by other tasks.
 #define HAVE_TECHNICS_SC 1
-#if HAVE_TRIGGER
+#if HAVE_PULSE
 const uint8_t kTechnicsSCDataPin = 5;
 const uint8_t kTechnicsSCClockPin = 6;
 #else
@@ -68,8 +63,10 @@ const uint16_t kSR2Pin = 5;
 #define HAVE_RC5 1
 const uint16_t kRC5Pin = 0;
 
+#if ENABLE_ESI
 #define HAVE_ESI 1
 const uint16_t kESIPin = 1;
+#endif
 
 #else
 // UNO form factor
@@ -120,7 +117,10 @@ const uint16_t kIR455ReceivePin = D_4;
 #if ENABLE_BEO_IC
 
 #define HAVE_DATALINK80 1
+// Beomasters have two Datalink '80 buses.
+// One for Tape 1 + (CD or Phono depending on model).
 const uint16_t kDatalink80Tape1Pin = D_5;
+// And one for Tape 2 + (TV/AUX or Phono depending on model).
 const uint16_t kDatalink80Tape2Pin = D_6;
 
 #define HAVE_DATALINK86 1
@@ -128,10 +128,10 @@ const uint16_t kDatalink86Pin = D_7;
 
 #else
 
-#if ENABLE_TRIGGER
-#define HAVE_TRIGGER 1
-const uint16_t kTrigger0Pin = D_5;
-const uint16_t kTrigger1Pin = D_6;
+#if ENABLE_PULSE
+#define HAVE_PULSE 1
+const uint16_t kPulse0Pin = D_5;
+const uint16_t kPulse1Pin = D_6;
 #elif ENABLE_TECHNICS_SC
 // Only enable Technics System Control if you really need it as it's always active and takes processing time even when idle.
 // This is also less reliable than the other receivers as it isn't using interrupts and will be blocked by other tasks.
@@ -148,11 +148,13 @@ const uint16_t kSRPin = D_7; // NEC/SIRC
 #define HAVE_RC5 1
 const uint16_t kRC5Pin = D_8;
 
+#if ENABLE_ESI
 #define HAVE_ESI 1
 #ifdef ESP32
 const uint16_t kESIPin = D_12;
 #else
 const uint16_t kESIPin = D_10;
+#endif
 #endif
 
 #endif
@@ -164,10 +166,14 @@ const uint16_t kESIPin = D_10;
 
 #include <ProtocolUtils.h>
 #include <ProtocolRC5.h>
+#if HAVE_ESI
 #include <ProtocolESI.h>
+#endif
 #include <ProtocolNEC.h>
 #include <ProtocolSIRC.h>
+#if ENABLE_BEO36
 #include <ProtocolBeo36.h>
+#endif
 #include <ProtocolDatalink80.h>
 #include <ProtocolDatalink86.h>
 #include <ProtocolTechnicsSC.h>
@@ -180,6 +186,10 @@ const uint16_t kESIPin = D_10;
 #endif
 
 using namespace inseparates;
+
+#if ENABLE_MULTICORE
+inseparates::LockFreeFIFO<Message, 16> inFIFO;
+#endif
 
 DebugPrinter printer;
 #if DEBUG_FULL_TIMING
@@ -201,9 +211,9 @@ InterruptWriteScheduler writeScheduler(30);
 #define InterruptPinWriter OpenDrainPinWriter
 #define SCHEDULER_PARAM
 #endif
-#if HAVE_TRIGGER
-OpenDrainPinWriter trigger0PinWriter(kTrigger0Pin, LOW, INPUT_PULLUP);
-OpenDrainPinWriter trigger1PinWriter(kTrigger1Pin, LOW, INPUT_PULLUP);
+#if HAVE_PULSE
+OpenDrainPinWriter pulse0PinWriter(kPulse0Pin, LOW, INPUT_PULLUP);
+OpenDrainPinWriter pulse1PinWriter(kPulse1Pin, LOW, INPUT_PULLUP);
 #endif
 #if HAVE_RC5
 InterruptPinWriter rc5PinWriter(SCHEDULER_PARAM kRC5Pin, HIGH, INPUT_PULLDOWN);
@@ -235,12 +245,13 @@ PWMPinWriter irPinWriter(kIRSendPin, IR_SEND_ACTIVE);
 
 void InsError(uint32_t error)
 {
-  char errorMsg[5];
+  char errorMsg[4];
   strncpy(errorMsg, (const char*)&error, 4);
-  errorMsg[4] = 0;
-  String errorString = "FATALERROR: ";
-  errorString += errorMsg;
-  logLine(errorString, ILT_ALL);
+  char errorString[TMP_STRING_SIZE];
+  errorString[0] = '\0';
+  size_t pos = strnnncat(errorString, 0, TMP_STRING_SIZE, "FATALERROR: ");
+  pos = strnnncat(errorString, pos, TMP_STRING_SIZE, errorMsg, 4);
+  logLine(errorString, pos, ILT_ALL);
   Serial.flush();
   for(;;) yield();
 }
@@ -256,21 +267,24 @@ MCP23017 mcp = MCP23017(MCP23017_ADDR);
 
 void updateSwitches(uint32_t switchState, ins_log_target_t target)
 {
+  char logString[TMP_STRING_SIZE];
+  logString[0] = '\0';
 #if ENABLE_SWITCH
-  String logString = "NEW SWITCH STATE: 0x";
+  size_t pos = strnnncat(logString, 0, TMP_STRING_SIZE, F("NEW SWITCH STATE: "));
 #if SWITCH_ACTIVE_LOW
   mcp.write(~switchState);
-  logString += String(0xffff & ~mcp.read(), HEX);
+  pos += snprintf(logString + pos, TMP_STRING_SIZE - pos, "0x%X", ~mcp.read());
 #else
   mcp.write(switchState);
-  logString += String(mcp.read(), HEX);
+  pos += snprintf(logString + pos, TMP_STRING_SIZE - pos, "0x%X", mcp.read());
 #endif
-  logLine(logString, target);
 #else
-  String logString = "UNIMPLEMENTED SWITCH: ";
-  logString += String(switchState, HEX);
-  logLine(logString, target);
+  size_t pos = strnnncat(logString, 0, TMP_STRING_SIZE, F("UNIMPLEMENTED SWITCH: "));
+  pos += snprintf(logString + pos, TMP_STRING_SIZE - pos, "0x%X", switchState);
 #endif
+  if (pos >= TMP_STRING_SIZE)
+    pos = TMP_STRING_SIZE - 1;
+  logLine(logString, pos, target);
 }
 
 #if ENABLE_INSEPARATES
@@ -286,7 +300,9 @@ class MainTask  :
   public RxNEC::Delegate,
   public RxSIRC::Delegate,
 #endif
+#if ENABLE_BEO36
   public RxBeo36::Delegate,
+#endif
 #if HAVE_IR_455 || HAVE_DATALINK86
   public RxDatalink86::Delegate,
 #endif
@@ -299,9 +315,9 @@ class MainTask  :
 #endif
   public Scheduler::Delegate
 {
-#if HAVE_TRIGGER
-  TxJam _trigger0;
-  TxJam _trigger1;
+#if HAVE_PULSE
+  TxJam _pulse0;
+  TxJam _pulse1;
 #endif
 #if HAVE_RC5
   TxRC5 _txRC5;
@@ -323,7 +339,9 @@ class MainTask  :
   TxSIRC _txSIRC2;
   RxSIRC _rxSIRC2;
 #endif
+#if ENABLE_BEO36
   RxBeo36 _rxBeo36;
+#endif
 #if HAVE_IR_455
   RxDatalink86 _rx455;
 #endif
@@ -350,7 +368,9 @@ class MainTask  :
   RxNEC _rxNEC_IR;
   TxSIRC _txSIRC_IR;
   RxSIRC _rxSIRC_IR;
+#if HAVE_IR_455
   TxDatalink86 _tx455;
+#endif
 #endif
 
   // The vector here could be implemented with a deque but this would use more memory
@@ -359,9 +379,9 @@ class MainTask  :
 
 public:
   MainTask() :
-#if HAVE_TRIGGER
-    _trigger0(&trigger0PinWriter, LOW, 1),
-    _trigger1(&trigger1PinWriter, LOW, 1),
+#if HAVE_PULSE
+    _pulse0(&pulse0PinWriter, LOW, 1),
+    _pulse1(&pulse1PinWriter, LOW, 1),
 #endif
 #if HAVE_RC5
     _txRC5(&rc5PinWriter, HIGH),
@@ -378,38 +398,43 @@ public:
     _rxSIRC(LOW, this, 1),
 #endif
 #if HAVE_SECOND_SR
-    _txNEC2(&srPinWriter, LOW),
+    _txNEC2(&sr2PinWriter, LOW),
     _rxNEC2(LOW, this, 2),
     _txSIRC2(&sr2PinWriter, LOW),
     _rxSIRC2(LOW, this, 2),
 #endif
-    _rxBeo36(LOW, this, 0)
+#if ENABLE_BEO36
+    _rxBeo36(LOW, this, 0),
+#endif
 #if HAVE_IR_455
-    ,_rx455(LOW, this, 0)
+    _rx455(LOW, this, 0),
 #endif
 #if HAVE_DATALINK86
-    ,_txDatalink86(&datalink86PinWriter, LOW),
-    _rxDatalink86(LOW, this, 1)
+    _txDatalink86(&datalink86PinWriter, LOW),
+    _rxDatalink86(LOW, this, 1),
 #endif
 #if HAVE_DATALINK80
-    ,_txDatalink80Tape1(&datalink80Tape1PinWriter, LOW),
+    _txDatalink80Tape1(&datalink80Tape1PinWriter, LOW),
     _rxDatalink80Tape1(LOW, this, 1),
     _txDatalink80Tape2(&datalink80Tape2PinWriter, LOW),
-    _rxDatalink80Tape2(LOW, this, 2)
+    _rxDatalink80Tape2(LOW, this, 2),
 #endif
 #if HAVE_TECHNICS_SC
-    ,_rxTechnics(kTechnicsSCDataPin, kTechnicsSCClockPin, LOW, this),
-    _txTechnics(&technicsDataPinWriter, &technicsClockPinWriter, kTechnicsSCDataPin, kTechnicsSCClockPin, LOW, this)
+    _rxTechnics(kTechnicsSCDataPin, kTechnicsSCClockPin, LOW, this),
+    _txTechnics(&technicsDataPinWriter, &technicsClockPinWriter, kTechnicsSCDataPin, kTechnicsSCClockPin, LOW, this),
 #endif
 #if !ENABLE_IRREMOTE
-    ,_txRC5_IR(&irPinWriter, IR_SEND_ACTIVE),
+    _txRC5_IR(&irPinWriter, IR_SEND_ACTIVE),
     _rxRC5_IR(LOW, this, 0),
     _txNEC_IR(&irPinWriter, IR_SEND_ACTIVE),
     _rxNEC_IR(LOW, this, 0),
     _txSIRC_IR(&irPinWriter, IR_SEND_ACTIVE),
     _rxSIRC_IR(LOW, this, 0),
-    _tx455(&irPinWriter, IR_SEND_ACTIVE)
+#if HAVE_IR_455
+    _tx455(&irPinWriter, IR_SEND_ACTIVE),
 #endif
+#endif
+    _sendBuffer()
   {
   }
 
@@ -432,7 +457,9 @@ public:
 #if HAVE_IR_455
     scheduler.add(&_rx455, kIR455ReceivePin, ENABLE_READ_INTERRUPTS);
 #endif
-    scheduler.add(&_rxBeo36, kIRReceivePin, ENABLE_READ_INTERRUPTS);
+#if ENABLE_BEO36
+    scheduler.add(&_rxBeo36, kIRReceivePin, ENABLE_READ_INTERRUPTS && !ENABLE_IRREMOTE);
+#endif
 #if HAVE_DATALINK86
     scheduler.add(&_rxDatalink86, kDatalink86Pin, ENABLE_READ_INTERRUPTS);
 #endif
@@ -457,11 +484,11 @@ public:
     scheduler.add(&_rxSIRC_IR, kIRReceivePin, ENABLE_READ_INTERRUPTS);
 #endif
 
-#if HAVE_TRIGGER
-    Serial.print("Trigger 0 active on pin ");
-    Serial.println(kTrigger0Pin);
-    Serial.print("Trigger 1 active on pin ");
-    Serial.println(kTrigger1Pin);
+#if HAVE_PULSE
+    Serial.print("Pulse 0 active on pin ");
+    Serial.println(kPulse0Pin);
+    Serial.print("Pulse 1 active on pin ");
+    Serial.println(kPulse1Pin);
 #endif
 #if HAVE_IR_455
     Serial.print("IR 455 receiver active on pin ");
@@ -511,7 +538,7 @@ public:
     message.repeat = 0;
     message.bits = 12; // RC5X?
     message.bus = bus;
-    received(message);
+    publish(message);
   }
 #endif
 
@@ -525,7 +552,7 @@ public:
     message.repeat = 0;
     message.bits = bits;
     message.bus = bus;
-    received(message);
+    publish(message);
   }
 #endif
 
@@ -539,7 +566,7 @@ public:
     message.repeat = 0;
     message.bits = 32;
     message.bus = bus;
-    received(message);
+    publish(message);
   }
 
   void RxSIRCDelegate_data(uint32_t data, uint8_t bits, uint8_t bus) override
@@ -551,10 +578,11 @@ public:
     message.repeat = 0;
     message.bits = bits;
     message.bus = bus;
-    received(message);
+    publish(message);
   }
 #endif
 
+#if ENABLE_BEO36
   void RxBeo36Delegate_data(uint8_t data, uint8_t bus) override
   {
     Message message;
@@ -564,8 +592,9 @@ public:
     message.repeat = 0;
     message.bits = 6;
     message.bus = bus;
-    received(message);
+    publish(message);
   }
+#endif
 
 #if HAVE_IR_455 || HAVE_DATALINK86
   void RxDatalink86Delegate_data(uint64_t data, uint8_t bits, uint8_t bus) override
@@ -577,7 +606,7 @@ public:
     message.repeat = 0;
     message.bits = bits;
     message.bus = bus;
-    received(message);
+    publish(message);
   }
 #endif
 
@@ -591,7 +620,7 @@ public:
     message.repeat = 0;
     message.bits = 7;
     message.bus = bus;
-    received(message);
+    publish(message);
   }
 
   void RxDatalink80Delegate_timingError() override
@@ -609,7 +638,7 @@ public:
     message.repeat = 0;
     message.bits = 32;
     message.bus = 1;
-    received(message);
+    publish(message);
   }
 
   void TxTechnicsSCDelegate_done() override
@@ -677,21 +706,20 @@ public:
 
     SteppedTask *repeatTask = nullptr;
     bool unhandled = false;
-    uint64_t value = message.value;
     switch(message.protocol)
     {
-#if HAVE_TRIGGER
-    case TRIGGER:
+#if HAVE_PULSE
+    case PULSE:
       {
-        TxJam &_trigger = message.bus < 1 ? _trigger0 : _trigger1;
-        if (scheduler.active(&_trigger))
+        TxJam &_pulse = message.bus < 1 ? _pulse0 : _pulse1;
+        if (scheduler.active(&_pulse))
         {
-          _sendBuffer[&_trigger].push_back(message);
+          _sendBuffer[&_pulse].push_back(message);
           break;
         }
-        _trigger.prepare(1000 * value);
-        scheduler.add(&_trigger, this);
-        repeatTask = &_trigger;
+        _pulse.prepare(1000 * message.value);
+        scheduler.add(&_pulse, this);
+        repeatTask = &_pulse;
       }
       break;
 #endif
@@ -701,7 +729,7 @@ public:
       {
         static uint8_t toggle;
         toggle ^= 1;
-        value = TxRC5::encodeRC5X(toggle, message.address(), message.command());
+        message.setValue(TxRC5::encodeRC5X(toggle, message.address(), message.command()));
       }
 #if !ENABLE_IRREMOTE
       if (message.bus == 0)
@@ -712,7 +740,7 @@ public:
           break;
         }
         irPinWriter.prepare(36000, 30);
-        _txRC5_IR.prepare(value);
+        _txRC5_IR.prepare(message.value);
         scheduler.add(&_txRC5_IR, this);
         repeatTask = &_txRC5_IR;
         break;
@@ -724,7 +752,7 @@ public:
         _sendBuffer[&_txRC5].push_back(message);
         break;
       }
-      _txRC5.prepare(value);
+      _txRC5.prepare(message.value);
 #if ENABLE_WRITE_TIMER
       writeScheduler.add(&_txRC5, kRC5Pin, this);
 #else
@@ -742,7 +770,7 @@ public:
       {
         static uint8_t toggle;
         toggle ^= 1;
-        value = TxESI::encodeRC5(message.extended(), toggle, message.address(), message.command());
+        message.setValue(TxESI::encodeRC5(message.extended(), toggle, message.address(), message.command()));
         message.bits = TxESI::kRC5MessageBits;
       }
       if (scheduler.active(&_txESI))
@@ -750,7 +778,7 @@ public:
         _sendBuffer[&_txESI].push_back(message);
         break;
       }
-      _txESI.prepare(value, message.bits);
+      _txESI.prepare(message.value, message.bits);
 #if ENABLE_WRITE_TIMER
       writeScheduler.add(&_txESI, kESIPin, this);
 #else
@@ -766,9 +794,9 @@ public:
       if (message.addressAndCommandSet())
       {
         if (message.extendedSet())
-          value = TxNEC::encodeExtendedNEC(message.address(), message.command());
+          message.setValue(TxNEC::encodeExtendedNEC(message.address(), message.command()));
         else
-          value = TxNEC::encodeNEC(message.address(), message.command());
+          message.setValue(TxNEC::encodeNEC(message.address(), message.command()));
       }
 #if !ENABLE_IRREMOTE
       if (message.bus == 0)
@@ -780,14 +808,14 @@ public:
           break;
         }
         irPinWriter.prepare(38000, 30);
-        _txNEC_IR.prepare(value);
+        _txNEC_IR.prepare(message.value);
         scheduler.add(&_txNEC_IR, this);
         repeatTask = &_txNEC_IR;
         break;
       }
 #endif
 #if HAVE_SR
-      if (message.bus == 1)
+      if (message.bus <= 1)
       {
         unhandled = false;
         if (scheduler.active(&_txNEC))
@@ -795,7 +823,7 @@ public:
           _sendBuffer[&_txNEC].push_back(message);
           break;
         }
-        _txNEC.prepare((repeatMessage && message.protocol == NEC) ? 0 : value);
+        _txNEC.prepare((repeatMessage && message.protocol == NEC) ? 0 : message.value);
 #if ENABLE_WRITE_TIMER
         writeScheduler.add(&_txNEC, kSRPin, this);
 #else
@@ -813,9 +841,9 @@ public:
           _sendBuffer[&_txNEC2].push_back(message);
           break;
         }
-        _txNEC2.prepare((repeatMessage && message.protocol == NEC) ? 0 : value);
+        _txNEC2.prepare((repeatMessage && message.protocol == NEC) ? 0 : message.value);
 #if ENABLE_WRITE_TIMER
-        writeScheduler.add(&_txNEC2, kSRPin, this);
+        writeScheduler.add(&_txNEC2, kSR2Pin, this);
 #else
         scheduler.add(&_txNEC2, this);
 #endif
@@ -829,9 +857,9 @@ public:
       if (message.addressAndCommandSet())
       {
         if (message.extendedSet())
-          value = TxSIRC::encodeSIRC20(message.extended(), message.address(), message.command());
+          message.setValue(TxSIRC::encodeSIRC20(message.extended(), message.address(), message.command()));
         else
-          value = TxSIRC::encodeSIRC(message.address(), message.command());
+          message.setValue(TxSIRC::encodeSIRC(message.address(), message.command()));
       }
 #if !ENABLE_IRREMOTE
       if (message.bus == 0)
@@ -843,14 +871,14 @@ public:
           break;
         }
         irPinWriter.prepare(40000, 30);
-        _txSIRC_IR.prepare(value, message.bits);
+        _txSIRC_IR.prepare(message.value, message.bits);
         scheduler.add(&_txSIRC_IR, this);
         repeatTask = &_txSIRC_IR;
         break;
       }
 #endif
 #if HAVE_SR
-      if (message.bus == 1)
+      if (message.bus <= 1)
       {
         unhandled = false;
         if (scheduler.active(&_txSIRC))
@@ -858,7 +886,7 @@ public:
           _sendBuffer[&_txSIRC].push_back(message);
           break;
         }
-        _txSIRC.prepare(value, message.bits);
+        _txSIRC.prepare(message.value, message.bits);
 #if ENABLE_WRITE_TIMER
         writeScheduler.add(&_txSIRC, kSRPin, this);
 #else
@@ -876,7 +904,7 @@ public:
           _sendBuffer[&_txSIRC2].push_back(message);
           break;
         }
-        _txSIRC2.prepare(value, message.bits);
+        _txSIRC2.prepare(message.value, message.bits);
 #if ENABLE_WRITE_TIMER
         writeScheduler.add(&_txSIRC2, kSR2Pin, this);
 #else
@@ -888,7 +916,7 @@ public:
       break;
 
     case DATALINK86:
-#if !ENABLE_IRREMOTE
+#if !ENABLE_IRREMOTE && HAVE_IR_455
       if (message.bus == 0)
       {
         if (scheduler.active(&_tx455))
@@ -897,7 +925,7 @@ public:
           break;
         }
         irPinWriter.prepare(455000, 30);
-        _tx455.prepare(value, message.bits, true, repeatMessage);
+        _tx455.prepare(message.value, message.bits, true, repeatMessage);
         scheduler.add(&_tx455, this);
         repeatTask = &_tx455;
         break;
@@ -909,7 +937,7 @@ public:
         _sendBuffer[&_txDatalink86].push_back(message);
         break;
       }
-      _txDatalink86.prepare(value, message.bits, false, repeatMessage);
+      _txDatalink86.prepare(message.value, message.bits, false, repeatMessage);
 #if ENABLE_WRITE_TIMER
       writeScheduler.add(&_txDatalink86, kDatalink86Pin, this);
 #else
@@ -930,9 +958,9 @@ public:
           _sendBuffer[&_txDatalink80].push_back(message);
           break;
         }
-        _txDatalink80.prepare(value);
+        _txDatalink80.prepare(message.value);
 #if ENABLE_WRITE_TIMER
-        writeScheduler.add(&_txDatalink80, message.bus < 2 ? kDatalink80Pin1 : kDatalink80Pin2, this);
+        writeScheduler.add(&_txDatalink80, message.bus < 2 ? kDatalink80Tape1Pin : kDatalink80Tape2Pin, this);
 #else
         scheduler.add(&_txDatalink80, this);
 #endif
@@ -945,7 +973,7 @@ public:
     case TECHNICS_SC:
       if (message.addressAndCommandSet())
       {
-        value = TxTechnicsSC::encodeIR(message.address(), message.command());
+        message.setValue(TxTechnicsSC::encodeIR(message.address(), message.command()));
       }
       if (!_txTechnics.done())
       {
@@ -953,7 +981,7 @@ public:
         _technicsSendBuffer.push_back(message);
         break;
       }
-      _txTechnics.prepare(value);
+      _txTechnics.prepare(message.value);
       if (message.repeat > 0)
       {
         if (message.repeat != 0xff)
@@ -972,7 +1000,7 @@ public:
 
     if (unhandled)
     {
-      logLine(message.bus ? "UNHANDLED IC" : "UNHANDLED IR", (ins_log_target_t)message.logTarget);
+      logLine(message.bus ? "UNHANDLED IC" : "UNHANDLED IR", 12, (ins_log_target_t)message.logTarget);
       return;
     }
 
@@ -1016,14 +1044,25 @@ bool handleSwitches(const Message &message)
   return false;
 }
 
-void sendInseparates(Message &message)
+void doSendInseparates(Message &message)
 {
   if (handleSwitches(message))
     return;
 #if ENABLE_INSEPARATES
   mainTask.send(message);
 #else
-  logLine(message.bus ? "UNHANDLED IC" : "UNHANDLED IR", message.logTarget);
+  logLine(message.bus ? "UNHANDLED IC" : "UNHANDLED IR", 12, (ins_log_target_t)message.logTarget);
+#endif
+}
+
+void sendInseparates(Message &message)
+{
+#if ENABLE_MULTICORE
+  message.protocol_name = nullptr;
+  inFIFO.writeRef() = message;
+  inFIFO.push();
+#else
+  doSendInseparates(message);
 #endif
 }
 
@@ -1051,9 +1090,16 @@ void setupInseparates()
 #endif
 }
 
+void setupInseparates2()
+{
+#if ENABLE_WRITE_TIMER
+  writeScheduler.begin();
+#endif
+}
+
+#if ENABLE_INSEPARATES
 void loopInseparates()
 {
-#if ENABLE_INSEPARATES
   ins_micros_t now = fastMicros();
 
 #if DEBUG_FULL_TIMING
@@ -1061,6 +1107,15 @@ void loopInseparates()
 #endif
 #if DEBUG_CYCLE_TIMING
   cCheck.tick(now);
+#endif
+
+#if ENABLE_MULTICORE
+  if (!inFIFO.empty())
+  {
+    Message message = inFIFO.readRef();
+    doSendInseparates(message);
+    inFIFO.pop();
+  }
 #endif
 
   scheduler.poll();
@@ -1076,5 +1131,5 @@ void loopInseparates()
 #if DEBUG_CYCLE_TIMING
   cCheck.report(printer);
 #endif
-#endif
 }
+#endif

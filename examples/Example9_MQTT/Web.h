@@ -6,12 +6,6 @@
 #define WEBSERVER_H // https://stackoverflow.com/questions/75043892/i-am-facing-http-get-conflicts-with-a-previous-declaration-error-with-the-wifi
 #include <ESPAsyncWebServer.h>
 
-#ifdef ESP8266
-#include <ESPAsyncTCP.h>
-#else
-#include <AsyncTCP.h>
-#endif
-
 const char webInterfaceHTML[] PROGMEM = R"rawliteral(
 <!DOCTYPE html>
 <html>
@@ -133,9 +127,7 @@ const char webInterfaceHTML[] PROGMEM = R"rawliteral(
       timestampCell.textContent = timestamp;
 
       // Style messages based on type
-      if (data.startsWith("ACK:")) {
-        messageCell.style.color = "green";
-      } else if (data.startsWith("LOG:")) {
+      if (data.startsWith("LOG:")) {
         messageCell.style.color = "blue";
       }
       messageCell.textContent = data;
@@ -204,63 +196,59 @@ AsyncWebSocket ws("/ws");  // WebSocket endpoint.
 
 void websocketConnectionMessage(AsyncWebSocketClient *client)
 {
-  preferences.begin(PREFERENCES_NAMESPACE, true);
-  const String hostname = preferences.getString("hostname");
-  const String description = preferences.getString("description");
-  preferences.end();
-
-  StaticJsonDocument<256> doc;
-  doc["hostname"] = hostname;
-  doc["description"] = description;
-
-  String message;
-  serializeJson(doc, message);
-
-  String conMessage = "CON:";
-  conMessage += message;
+  char conMessage[TMP_JSON_SIZE];
+  conMessage[0] = '\0';
+  size_t pos = strnnncat(conMessage, 0, TMP_JSON_SIZE, F("CON:"));
+  connectMessage(conMessage + pos, TMP_JSON_SIZE - pos);
   client->text(conMessage);
 }
 
-void websocketLogMessage(const String &message)
+void websocketLogMessage(const char *message)
 {
-  String logMessage("LOG:");
-  logMessage += message;
+  char logMessage[TMP_STRING_SIZE];
+  logMessage[0] = '\0';
+  size_t pos = strnnncat(logMessage, 0, TMP_STRING_SIZE, F("LOG:"));
+  pos = strnnncat(logMessage, pos, TMP_STRING_SIZE, message);
   ws.textAll(logMessage);
 }
 
-void websocketMessage(const String &message)
+void websocketMessage(const char *message)
 {
   ws.textAll(message);
 }
 
 void webSocketCallback(AsyncWebSocket *server, AsyncWebSocketClient *client, AwsEventType type, void *arg, uint8_t *data, size_t len)
 {
-  if(type == WS_EVT_CONNECT)
+  switch(type)
   {
-    Serial.printf("WebSocket [%s][%u] connected\n", server->url(), client->id());
+  case WS_EVT_CONNECT:
+    Serial.printf("WebSocket %s [%u] connected\n", server->url(), client->id());
+    client->setCloseClientOnQueueFull(false);
     websocketConnectionMessage(client);
-  }
-  if(type != WS_EVT_DATA)
-  {
     return;
+  case WS_EVT_DISCONNECT:
+    Serial.printf("WebSocket [%u] disconnected\n", client->id());
+    return;
+  case WS_EVT_ERROR:
+    Serial.println(F("WebSocket ERROR!"));
+    return;
+  case WS_EVT_PONG:
+    Serial.println(F("WebSocket pong"));
+    return;
+  default:
+    Serial.println(F("WebSocket UNHANDLED!"));
+    return;
+  case WS_EVT_DATA:
+    break;
   }
   AwsFrameInfo *info = (AwsFrameInfo*)arg;
   if(!(info->final && info->index == 0 && info->len == len))
   {
-    // Ignore multi frame messages.
+    Serial.println("WebSocket: Ignored multi frame message!");
     return;
   }
 
-  String message;
-  for(size_t i = 0; i < info->len; i++)
-  {
-    message += char(data[i]);
-  }
-
-  String response = "ACK:" + message;
-  client->text(response);
-
-  messageCallback(message, ILT_WEBSOCKET);
+  messageCallback(data, len, ILT_WEBSOCKET);
 }
 
 void setupWebServer()
@@ -276,25 +264,39 @@ void setupWebServer()
   server.on("/send", HTTP_POST, [](AsyncWebServerRequest *request) {}, NULL,
     [](AsyncWebServerRequest *request, uint8_t *data, size_t len, size_t index, size_t total)
     {
-      String message(data, len);
-      messageCallback(message, ILT_NONE);
+      messageCallback(data, len, ILT_NONE);
 
       // This check will not find messages from the asynch IR send.
-      String logLine = getLogLine();
-      if (logLine.length())
+      const char *logLine = getLogLine();
+      if (*logLine)
       {
-        request->send(200, "application/json", "{\"status\":\"error\",\"message\":\"" + logLine + "\"}");
+        char reply[TMP_STRING_SIZE];
+        reply[0] = '\0';
+        size_t pos = strnnncat(reply, 0, TMP_STRING_SIZE, F("{\"status\":\"error\",\"message\":\""));
+        pos = strnnncat(reply, pos, TMP_STRING_SIZE, logLine);
+        pos = strnnncat(reply, pos, TMP_STRING_SIZE, "\"}");
+        request->send(200, "application/json", reply);
         return;
       }
 
-      request->send(200, "application/json", "{\"status\":\"success\",\"message\":\"Message sent\"}");
+      request->send(200, "application/json", F("{\"status\":\"success\",\"message\":\"Message sent\"}"));
     }
   );
 
   server.begin();
 }
 
+Timekeeper wstimekeeper;
+
 void loopWebServer()
 {
+  if (wstimekeeper.microsSinceReset() < 5000000L)
+  {
+    return;
+  }
+  wstimekeeper.reset();
   ws.cleanupClients();
+#if INS_DEBUGGING
+  Serial.printf("Free heap: %u bytes\n", ESP.getFreeHeap());
+#endif
 }
