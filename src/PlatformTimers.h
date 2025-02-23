@@ -50,6 +50,8 @@ public:
 		_timer(timerBegin(1000000))
 #endif
 	{
+		if (!_timer)
+			InsError(*(uint32_t*)"timr");
 	}
 
 	~HWTimer()
