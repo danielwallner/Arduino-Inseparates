@@ -107,25 +107,54 @@ public:
 		_frequency = frequency;
 		_dutyCycle = dutyCycle;
 #if defined(AVR)
-		uint16_t divisor = 1;
-		uint16_t pwmTop;
-		uint8_t p = 1;
-		for (; p <= 2; ++p)
+#if !INS_FAST_TIME
+		if (_pin == 9 || _pin == 10)
 		{
-			int32_t divFreq = divisor * _frequency;
-			pwmTop = (F_CPU + divFreq / 2) / divFreq;
-			if (pwmTop < 256)
+			// Set Timer1 to Fast PWM mode, using ICR1 as TOP
+			TCCR1A = (1 << WGM11);
+			TCCR1B = (1 << WGM13) | (1 << WGM12) | (1 << CS10); // No prescaler
+			ICR1 = (F_CPU / _frequency) - 1;
+			if (_pin == 9)
 			{
-				break;
+				OCR1A = (_dutyCycle * ICR1) / 100;
 			}
-			divisor = 8;
+			else
+			{
+				OCR1B = (_dutyCycle * ICR1) / 100;
+			}
 		}
+		else
+#endif
+		if (_pin == 3 || _pin == 11)
+		{
+			uint16_t divisor = 1;
+			uint16_t pwmTop;
+			uint8_t p = 1;
+			if (_pin == 11)
+			{
+				_frequency *= 2;
+			}
+			for (; p <= 2; ++p)
+			{
+				int32_t divFreq = divisor * _frequency;
+				pwmTop = (F_CPU + divFreq / 2) / divFreq;
+				if (pwmTop < 256)
+				{
+					break;
+				}
+				divisor = 8;
+			}
 
-		TIMSK2 &= ~(1 << OCIE2A); // Disable Timer 2 Output Compare Match Interrupt
-		TCCR2A = (1 << WGM21) | (1 << WGM20);
-		TCCR2B = (1 << WGM22) | p; // Fast PWM mode
-		OCR2A = pwmTop - 1;
-		OCR2B = (_dutyCycle * pwmTop) / 100;
+			TIMSK2 &= ~(1 << OCIE2A); // Disable Timer 2 Output Compare Match Interrupt
+			TCCR2A = (1 << WGM21) | (1 << WGM20);
+			TCCR2B = (1 << WGM22) | p; // Fast PWM mode
+			OCR2A = pwmTop - 1;
+			OCR2B = (_dutyCycle * pwmTop) / 100; // Only works on pin 3
+		}
+		else
+		{
+			InsError(*(uint32_t*)"ppwm");
+		}
 #elif defined(ESP8266)
 		// ESP8266 analogWrite is a software PWM that doesn't work for high frequencies (Depending on CPU clock).
 		if (esp_get_cpu_freq_mhz() < 100UL)
@@ -151,26 +180,53 @@ public:
 		if (value == _onState)
 		{
 #if defined(AVR)
-			uint8_t pinmode;
-			if (_onState == HIGH)
+#if !INS_FAST_TIME
+			if (_pin == 9 || _pin == 10)
 			{
-				pinmode = (1 << COM2A1);
+				TCNT1 = 0;
+				uint8_t pinmode;
+				if (_onState == HIGH)
+				{
+					pinmode = (1 << COM1A1);
+				}
+				else
+				{
+					pinmode = (1 << COM1A1) | (1 << COM1A0);
+				}
+				if (_pin == 9)
+				{
+					TCCR1A |= pinmode;
+				}
+				else
+				{
+					TCCR1A |= pinmode >> 2;
+				}
 			}
 			else
+#endif
 			{
-				pinmode = (1 << COM2A1) | (1 << COM2A0);
-			}
-			if (_pin == 11)
-			{
-				TCCR2A |= pinmode;
-			}
-			else if (_pin == 3)
-			{
-				TCCR2A |= pinmode >> 2;
-			}
-			else
-			{
-				InsError(*(uint32_t*)"tpin");
+				TCNT2 = 0;
+				uint8_t pinmode;
+				if (_pin == 11)
+				{
+					TCCR2A |= (1 << COM2A0);
+				}
+				else if (_pin == 3)
+				{
+					if (_onState == HIGH)
+					{
+						pinmode = (1 << COM2B1);
+					}
+					else
+					{
+						pinmode = (1 << COM2B1) | (1 << COM2B0);
+					}
+					TCCR2A |= pinmode;
+				}
+				else
+				{
+					InsError(*(uint32_t*)"tpin");
+				}
 			}
 #elif defined(ESP8266)
 			analogWriteFreq(_frequency);
@@ -212,7 +268,16 @@ public:
 		else
 		{
 #if defined(AVR)
-			TCCR2A &= 0xF;
+#if !INS_FAST_TIME
+			if (_pin == 9 || _pin == 10)
+			{
+				TCCR1A &= 0xF;
+			}
+			else
+#endif
+			{
+				TCCR2A &= 0xF;
+			}
 #elif defined(ESP8266)
 			digitalWrite(_pin, 1 ^ _onState);
 #elif defined(ESP32)
