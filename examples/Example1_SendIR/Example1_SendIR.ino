@@ -3,7 +3,7 @@
 // A simple send example that doesn't use full scheduling.
 // Sends single messages, one at a time.
 
-#define INS_FAST_TIME 1
+#define INS_FAST_TIME 0
 #define MODULATE 1
 
 #define TEST_PWM 0 // Sends long marks for PWM tests.
