@@ -13,7 +13,6 @@ namespace inseparates
 {
 
 #ifdef ESP8266
-
 #define INS_HAVE_HW_TIMER 1
 
 class HWTimer

@@ -21,6 +21,11 @@
 #include "PlatformTimers.h"
 #include "DebugUtils.h"
 
+#ifdef ARDUINO_SAMD_ZERO
+#include <wiring_private.h>
+#define USE_PIN_PERIPHERAL 1
+#endif
+
 #if INS_OUTPUT_FIFO_CHANNEL_COUNT
 #include <deque>
 #include <map>
@@ -155,6 +160,38 @@ public:
 		{
 			InsError(*(uint32_t*)"ppwm");
 		}
+#elif defined(ARDUINO_SAMD_ZERO)
+		if (_pin == 9)
+		{
+			GCLK->CLKCTRL.reg = GCLK_CLKCTRL_CLKEN | GCLK_CLKCTRL_GEN_GCLK0| GCLK_CLKCTRL_ID(GCM_TCC0_TCC1);
+			while (GCLK->STATUS.bit.SYNCBUSY);
+
+			TCC1->CTRLA.bit.ENABLE = 0;
+			while (TCC1->SYNCBUSY.bit.ENABLE);
+
+			TCC1->WAVE.reg |= TCC_WAVE_WAVEGEN_NPWM;
+			while (TCC1->SYNCBUSY.bit.WAVE);
+
+			TCC1->PER.reg = (F_CPU / _frequency) - 1;
+			while (TCC1->SYNCBUSY.bit.PER);
+
+			if (_onState == LOW)
+			{
+				_dutyCycle = 100 - _dutyCycle;
+			}
+
+			TCC1->CC[1].reg = (_dutyCycle * TCC1->PER.reg) / 100;
+			while (TCC1->SYNCBUSY.bit.CC1);
+
+#if !USE_PIN_PERIPHERAL
+			PORT->Group[g_APinDescription[_pin].ulPort].PINCFG[g_APinDescription[_pin].ulPin].bit.PMUXEN = 1;
+			PORT->Group[g_APinDescription[_pin].ulPort].PMUX[g_APinDescription[_pin].ulPin >> 1].reg = PORT_PMUX_PMUXO_E;
+#endif
+		}
+		else
+		{
+			InsError(*(uint32_t*)"ppwm");
+		}
 #elif defined(ESP8266)
 		// ESP8266 analogWrite is a software PWM that doesn't work for high frequencies (Depending on CPU clock).
 		if (esp_get_cpu_freq_mhz() < 100UL)
@@ -228,6 +265,19 @@ public:
 					InsError(*(uint32_t*)"tpin");
 				}
 			}
+#elif defined(ARDUINO_SAMD_ZERO)
+			if (_pin == 9)
+			{
+				TCC1->CC[1].reg = (_dutyCycle * TCC1->PER.reg) / 100;
+				while (TCC1->SYNCBUSY.bit.CC1);
+				TCC1->CTRLA.bit.ENABLE = 1;
+				while (TCC1->SYNCBUSY.bit.ENABLE);
+#if USE_PIN_PERIPHERAL
+				pinPeripheral(_pin, PIO_TIMER);
+#else
+				PORT->Group[g_APinDescription[_pin].ulPort].PINCFG[g_APinDescription[_pin].ulPin].bit.PMUXEN = 1;
+#endif
+			}
 #elif defined(ESP8266)
 			analogWriteFreq(_frequency);
 			if (_onState == HIGH)
@@ -277,6 +327,18 @@ public:
 #endif
 			{
 				TCCR2A &= 0xF;
+			}
+#elif defined(ARDUINO_SAMD_ZERO)
+			if (_pin == 9)
+			{
+				TCC1->CTRLA.bit.ENABLE = 0;
+				while (TCC1->SYNCBUSY.bit.ENABLE);
+				digitalWrite(_pin, 1 ^ _onState);
+#if USE_PIN_PERIPHERAL
+				pinPeripheral(_pin, PIO_OUTPUT);
+#else
+				PORT->Group[g_APinDescription[_pin].ulPort].PINCFG[g_APinDescription[_pin].ulPin].bit.PMUXEN = 0;
+#endif
 			}
 #elif defined(ESP8266)
 			digitalWrite(_pin, 1 ^ _onState);
