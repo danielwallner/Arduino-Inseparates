@@ -9,8 +9,9 @@
 
 #define INS_FAST_TIME 1
 
-#define HW_PWM 0 // Will use timer 2 on AVR.
+#define HW_PWM 1 // Will use timer 1 or 2 on AVR.
 #define SW_PWM 0 // Define HW_PWM or SW_PWM to modulate the IR output.
+#define ACTIVE LOW
 
 #include <Inseparates.h>
 #include <DebugUtils.h>
@@ -41,9 +42,9 @@ DebugPrinter printer;
 Scheduler scheduler;
 
 #if HW_PWM
-PWMPinWriter irPinWriter(kIRSendPin, LOW);
+PWMPinWriter irPinWriter(kIRSendPin, ACTIVE);
 #elif SW_PWM
-SoftPWMPinWriter irPinWriter(kIRSendPin, LOW);
+SoftPWMPinWriter irPinWriter(kIRSendPin, ACTIVE);
 #else
 PushPullPinWriter irPinWriter(kIRSendPin);
 #endif
@@ -70,7 +71,7 @@ class MainTask  : public SteppedTask
 
 public:
   MainTask() :
-    _txRC5(&irPinWriter, LOW)
+    _txRC5(&irPinWriter, ACTIVE)
   {
   }
 

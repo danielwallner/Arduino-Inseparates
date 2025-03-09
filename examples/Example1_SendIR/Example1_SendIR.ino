@@ -31,7 +31,7 @@ static const uint8_t D_9  = 9;
 
 #if MODULATE
 // Send IR
-#define HW_PWM 1 // Will use timer 2 on AVR.
+#define HW_PWM 1 // Will use timer 1 or 2 on AVR.
 #define SW_PWM 0 // This requires running two tasks in parallel, see below.
 #define ACTIVE LOW
 #define OFF_MODE INPUT_PULLUP
