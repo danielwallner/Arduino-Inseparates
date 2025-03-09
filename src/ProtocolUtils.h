@@ -27,7 +27,7 @@
 #endif
 
 #if INS_OUTPUT_FIFO_CHANNEL_COUNT
-#include <deque>
+#include <vector>
 #include <map>
 #endif
 
@@ -545,8 +545,8 @@ private:
 	LockFreeFIFO<OutputData, INS_OUTPUT_FIFO_LENGTH> _outputFIFO[INS_OUTPUT_FIFO_CHANNEL_COUNT];
 	OutputData *_writeRef;
 	TaskData _outputFIFO_current[INS_OUTPUT_FIFO_CHANNEL_COUNT];
-	std::deque<TaskData> _waitlist;
-	std::deque<TaskData> _donelist;
+	std::vector<TaskData> _waitlist;
+	std::vector<TaskData> _donelist;
 #ifndef UNIT_TEST
 	HWTimer _timer;
 #endif
@@ -582,7 +582,7 @@ public:
 		{
 			TaskData &td = _donelist.front();
 			td.delegate->SchedulerDelegate_done(td.task);
-			_donelist.pop_front();
+			_donelist.erase(_donelist.begin());
 		}
 
 		for (uint8_t i = 0; i < INS_OUTPUT_FIFO_CHANNEL_COUNT; ++i)
