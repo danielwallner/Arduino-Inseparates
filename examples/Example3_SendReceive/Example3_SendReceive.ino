@@ -132,6 +132,9 @@ public:
     _technicsDecoder(kTechnicsSCDataPin, kTechnicsSCClockPin, LOW, this)
   {
     pinMode(kESIRecvPin, INPUT); // To turn off pull-up
+#if HW_PWM || SW_PWM
+    irPinWriter.prepare(36000, 30);
+#endif
   }
 
   void begin()
@@ -234,10 +237,6 @@ void setup()
   scheduler.begin();
   scheduler.add(&printer);
   mainTask.begin();
-
-#if HW_PWM || SW_PWM
-  irPinWriter.prepare(36000, 30);
-#endif
 }
 
 void loop()

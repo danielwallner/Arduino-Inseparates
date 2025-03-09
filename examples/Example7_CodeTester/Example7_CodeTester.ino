@@ -70,6 +70,12 @@ public:
 
   void begin()
   {
+#if HW_PWM || SW_PWM
+    irPinWriter.prepare(36000, 30);
+#endif
+#if SW_PWM && !HW_PWM
+    scheduler.add(&irPinWriter);
+#endif
     scheduler.add(this);
   }
 
@@ -139,10 +145,6 @@ void setup()
   scheduler.begin();
   scheduler.add(&printer);
   mainTask.begin();
-
-#if HW_PWM || SW_PWM
-  irPinWriter.prepare(36000, 30);
-#endif
 }
 
 void loop()
