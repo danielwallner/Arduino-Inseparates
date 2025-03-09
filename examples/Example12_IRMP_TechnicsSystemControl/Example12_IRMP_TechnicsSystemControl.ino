@@ -12,13 +12,30 @@
 
 #include <Arduino.h>
 
+#if defined(ESP8266) // WEMOS D1 R2
+static const uint8_t D_3  = 5;
+static const uint8_t D_4  = 4;
+static const uint8_t D_5  = 0;
+static const uint8_t D_6  = 2;
+#elif defined(ESP32) // WEMOS D1 R32
+static const uint8_t D_3  = 25;
+static const uint8_t D_4  = 17;
+static const uint8_t D_5  = 16;
+static const uint8_t D_6  = 27;
+#else
+static const uint8_t D_3  = 3;
+static const uint8_t D_4  = 4;
+static const uint8_t D_5  = 5;
+static const uint8_t D_6  = 6;
+#endif
+
 #define IRMP_ENABLE_PIN_CHANGE_INTERRUPT
 #define IRMP_SUPPORT_NEC_PROTOCOL 1      // Pioneer + Yamaha
 #define IRMP_SUPPORT_KASEIKYO_PROTOCOL 1 // Technics
-#define IRMP_INPUT_PIN D3
+#define IRMP_INPUT_PIN D_3
 
-const uint16_t kTechnicsSCDataPin = D5;
-const uint16_t kTechnicsSCClockPin = D6;
+const uint16_t kTechnicsSCDataPin = D_5;
+const uint16_t kTechnicsSCClockPin = D_6;
 
 #include <irmp.hpp>
 

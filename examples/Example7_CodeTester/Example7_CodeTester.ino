@@ -21,13 +21,19 @@
 
 #if defined(ESP8266) // WEMOS D1 R2
 static const uint8_t D_3  = 5;
+static const uint8_t D_9  = 13;
+#elif defined(CONFIG_IDF_TARGET_ESP32C3) // ESP32 C3 16 pin supermini
+static const uint8_t D_3  = 10; // IR RECEIVE
+static const uint8_t D_9  = 2; // IR SEND
 #elif defined(ESP32) // WEMOS D1 R32
 static const uint8_t D_3  = 25;
+static const uint8_t D_9  = 13;
 #else
 static const uint8_t D_3  = 3;
+static const uint8_t D_9  = 9;
 #endif
 
-const uint16_t kIRSendPin = D_3;
+const uint16_t kIRSendPin = D_9;
 
 using namespace inseparates;
 

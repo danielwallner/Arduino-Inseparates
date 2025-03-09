@@ -80,8 +80,12 @@ void setup()
     delay(50);
 
   pinMode(kInputPin0, INPUT_MODE);
+  Serial.print("Reading pin(0): ");
+  Serial.println(kInputPin0);
 #if DUAL_PIN
   pinMode(kInputPin1, INPUT_MODE);
+  Serial.print("Reading pin(1): ");
+  Serial.println(kInputPin1);
 #endif
 
 #if INS_FAST_TIME

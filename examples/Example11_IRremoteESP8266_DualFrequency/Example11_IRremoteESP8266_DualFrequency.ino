@@ -84,7 +84,7 @@ static const uint8_t D_9  = 9;
 #endif
 
 const uint16_t kMainReceivePin = D_3;
-const uint16_t kDatalink86RecvPin = D_7;
+const uint16_t kDatalink86RecvPin = D_4;
 const uint16_t kIRSendPin = D_9;
 
 using namespace inseparates;
@@ -116,16 +116,6 @@ TxSIRC txSIRC(&irPinWriter, LOW);
 
 #include <extras/DecodeIR.h>
 #include <extras/EncodeIR.h>
-
-#if !defined(D2) && defined(PD2)
-#define D2 PD2
-#endif
-#if !defined(D3) && defined(PD3)
-#define D3 PD3
-#endif
-#if !defined(D6) && defined(PD6)
-#define D6 PD6
-#endif
 
 void InsError(uint32_t error)
 {

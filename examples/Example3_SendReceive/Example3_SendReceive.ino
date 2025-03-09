@@ -58,7 +58,7 @@ static const uint8_t D_10 = 10;
 #endif
 
 const uint16_t kIRSendPin = D_9;
-const uint16_t kRC5RecvPin = D_8;
+const uint16_t kRC5RecvPin = D_3;
 const uint16_t kESISendPin = D_10;
 const uint16_t kESIRecvPin = D_10;
 const uint16_t kTechnicsSCDataPin = D_5;

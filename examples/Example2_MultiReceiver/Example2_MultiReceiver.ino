@@ -55,10 +55,10 @@ static const uint8_t D_10 = 10;
 
 const uint8_t kBeo36RecvPin = D_3;
 const uint8_t kDatalink80RecvPin = D_5;
-const uint8_t kDatalink86RecvPin = D_7;
+const uint8_t kDatalink86RecvPin = D_4;
 const uint8_t kESIRecvPin = D_10;
 const uint8_t kNECRecvPin = D_3;
-const uint8_t kRC5RecvPin = D_8;
+const uint8_t kRC5RecvPin = D_3;
 const uint8_t kSIRCRecvPin = D_3;
 const uint8_t kTechnicsSCDataPin = D_5;
 const uint8_t kTechnicsSCClockPin = D_6;
@@ -159,7 +159,7 @@ RxDatalink80 datalink80Decoder(LOW, &delegate);
 RxDatalink86 datalink86Decoder(LOW, &delegate);
 RxESI esiDecoder(HIGH, &delegate);
 RxNEC necDecoder(LOW, &delegate);
-RxRC5 rc5Decoder(HIGH, &delegate);
+RxRC5 rc5Decoder(LOW, &delegate);
 RxSIRC sircDecoder(LOW, &delegate);
 RxTechnicsSC technicsDecoder(kTechnicsSCDataPin, kTechnicsSCClockPin, LOW, &delegate);
 
