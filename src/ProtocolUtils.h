@@ -14,7 +14,11 @@
 #endif
 
 #ifndef INS_OUTPUT_FIFO_CHANNEL_LENGTH
+#if defined(ESP32)
 #define INS_OUTPUT_FIFO_LENGTH 1024
+#else
+#define INS_OUTPUT_FIFO_LENGTH 256
+#endif
 #endif
 
 #include "Inseparates.h"

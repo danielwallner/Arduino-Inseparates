@@ -43,8 +43,10 @@
 #ifndef INS_INPUT_FIFO_LENGTH
 #ifdef AVR
 #define INS_INPUT_FIFO_LENGTH 64
-#else
+#elif defined(ESP32)
 #define INS_INPUT_FIFO_LENGTH 1024
+#else
+#define INS_INPUT_FIFO_LENGTH 256
 #endif
 #endif
 
