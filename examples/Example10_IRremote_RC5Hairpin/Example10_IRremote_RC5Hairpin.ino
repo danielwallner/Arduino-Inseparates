@@ -263,10 +263,7 @@ public:
         IrReceiver.resume();
 #endif
 #if DEBUG_PRINTS
-        printer.print("Unsupported: a");
-        printer.print(String(address));
-        printer.print(" c");
-        printer.println(String(command));
+        printer.printf("Unsupported: a%hd c%hd\n", short(address), short(command));
 #endif
         return IR_RECEIVE_POLL_INTERVAL;
       }
@@ -304,8 +301,7 @@ public:
 #endif
 
 #if DEBUG_PRINTS
-    printer.print("Sent: ");
-    printer.println(String(_encodedMessage, HEX));
+    printer.printf("Sent: 0x%hF\n", short(_encodedMessage));
 #endif
     return RECEIVE_HOLD_OFF;
   }

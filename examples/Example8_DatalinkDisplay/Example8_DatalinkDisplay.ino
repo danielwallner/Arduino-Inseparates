@@ -76,11 +76,10 @@ class Delegate : public RxDatalink86::Delegate
 public:
   void RxDatalink86Delegate_data(uint64_t data, uint8_t bits, uint8_t bus) override
   {
-    printer.print("Datalink86: ");
-    printer.print(String(uint32_t(data >> 32), HEX));
-    printer.print(String(uint32_t(data), HEX));
-    printer.print(" ");
-    printer.println(String(bits));
+    if (data >> 32)
+      printer.printf("Datalink86: 0x%lX%08lX %hd\n", long(data >> 32), long(data), short(bits));
+    else
+      printer.printf("Datalink86: 0x%lX %hd\n", long(data), short(bits));
   }
 };
 

@@ -101,19 +101,12 @@ public:
   {
     // Printing here is not ideal.
     // Only do this for debugging and know it will affect the timing of tasks!
-    printer.print("Beo36: ");
-    printer.print(" ");
-    printer.print(String(data << 1, HEX));
-    printer.print(" ");
-    printer.println(String(data, HEX));
+    printer.printf("Beo36: 0x%hX\n", (short)data);
   }
 
   void RxDatalink80Delegate_data(uint8_t data, uint8_t bus) override
   {
-    printer.print("Datalink80: ");
-    printer.print(String(0x7F & ~data, BIN));
-    printer.print(" ");
-    printer.println(String(data, HEX));
+    printer.printf("Datalink80: 0x%hX\n", (short)data);
   }
 
   void RxDatalink80Delegate_timingError() override
@@ -123,42 +116,38 @@ public:
 
   void RxDatalink86Delegate_data(uint64_t data, uint8_t bits, uint8_t bus) override
   {
-    printer.print("Datalink86: ");
-    printer.print(String(uint32_t(data >> 32), HEX));
-    printer.print(String(uint32_t(data), HEX));
-    printer.print(" ");
-    printer.println(String(bits));
+    if (data >> 32)
+      printer.printf("Datalink86: 0x%lX%08lX %hd\n", long(data >> 32), long(data), short(bits));
+    else
+      printer.printf("Datalink86: 0x%lX %hd\n", long(data), short(bits));
   }
 
   void RxESIDelegate_data(uint64_t data, uint8_t bits, uint8_t bus) override
   {
-    printer.printf("ESI data: %0lx%0lx bits: %hhu\n", uint32_t(data >> 32),  uint32_t(data), bits);
+    if (data >> 32)
+      printer.printf("ESI: 0x%lX%08lX %hd\n", long(data >> 32), long(data), short(bits));
+    else
+      printer.printf("ESI: 0x%lX %hd\n", long(data), short(bits));
   }
 
   void RxNECDelegate_data(uint32_t data, uint8_t bus) override
   {
-    printer.print("NEC: ");
-    printer.println(String(data, HEX));
+    printer.printf("NEC: 0x%lX\n", (long)data);
   }
 
   void RxRC5Delegate_data(uint16_t data, uint8_t bus) override
   {
-    printer.print("RC5: ");
-    printer.println(String(data, HEX));
+    printer.printf("RC5: 0x%hX\n", (short)data);
   }
 
   void RxSIRCDelegate_data(uint32_t data, uint8_t bits, uint8_t bus) override
   {
-    printer.print("SIRC: ");
-    printer.print(String(data, HEX));
-    printer.print(" ");
-    printer.println(String(bits));
+    printer.printf("SIRC: 0x%lX %hd\n", (long)data, (short)bits);
   }
 
   void RxTechnicsSCDelegate_data(uint32_t data) override
   {
-    printer.print("Technics SC: ");
-    printer.println(String(data, HEX));
+    printer.printf("Technics SC: 0x%lX\n", (long)data);
   }
 };
 

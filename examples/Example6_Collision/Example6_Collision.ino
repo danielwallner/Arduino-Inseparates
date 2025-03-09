@@ -126,7 +126,7 @@ public:
   void RxESIDelegate_data(uint64_t data, uint8_t bits, uint8_t bus) override
   {
     _receivedMessage = data;
-    printer.printf("ESI data: %0lx%0lx bits: %hhu\n", uint32_t(data >> 32),  uint32_t(data), bits);
+    printer.printf("ESI data: %0lx%0lx bits: %hu\n", long(data >> 32),  long(data), short(bits));
   }
 
   void CheckingPinWriterDelegate_error(uint8_t pin) override

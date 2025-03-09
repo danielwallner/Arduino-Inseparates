@@ -155,4 +155,135 @@ INS_IRAM_ATTR void timerISR()
 }
 #endif
 
+int Serial_printf(const char *format, ...)
+{
+#ifdef UNIT_TEST
+	va_list argptr;
+	va_start(argptr, format);
+	int ret = vprintf(format, argptr);
+	va_end(argptr);
+	return ret;
+#else
+	static const uint8_t kBufferLength = 64;
+	char string[kBufferLength];
+	va_list argptr;
+	int ret;
+	va_start(argptr, format);
+	ret = vsnprintf(string, kBufferLength, format, argptr);
+	va_end(argptr);
+	Serial.print(string);
+	return ret;
+#endif
+}
+
+int DebugPrinter::printf(const char *format, ...)
+{
+	uint8_t p = 0;
+	if (_pos < kBufferLength && _string[_pos])
+	{
+		// Append
+		for (p = _pos; p < kBufferLength && _string[p]; ++p);
+	}
+	else
+	{
+		_pos = 0;
+	}
+	va_list argptr;
+	int ret;
+	va_start(argptr, format);
+	ret = vsnprintf(_string + p, kBufferLength - p, format, argptr);
+	va_end(argptr);
+	return ret;
+}
+
+void DebugPrinter::print(const char *string)
+{
+	uint8_t p = 0;
+	if (_pos < kBufferLength && _string[_pos])
+	{
+		// Append
+		for (p = _pos;  p < kBufferLength && _string[p]; ++p);
+	}
+	else
+	{
+		_pos = 0;
+	}
+
+	uint8_t i = 0;
+	for (; p + i < kBufferLength && string[i]; ++i)
+	{
+		_string[p + i] = string[i];
+	}
+
+	if (p + i < kBufferLength)
+	{
+		_string[p + i] = '\0';
+	}
+}
+
+void DebugPrinter::println(const char *string)
+{
+	uint8_t p = 0;
+	if (_pos < kBufferLength && _string[_pos])
+	{
+		// Append
+		for (p = _pos;  p < kBufferLength && _string[p]; ++p);
+	}
+	else
+	{
+		_pos = 0;
+	}
+
+	uint8_t i = 0;
+	for (; p + i < kBufferLength && i < string[i]; ++i)
+	{
+		_string[p + i] = string[i];
+	}
+
+	if (p + i + 1 < kBufferLength)
+	{
+		_string[p + i] = '\n';
+		_string[p + i + 1] = '\0';
+	}
+	else if (p + i < kBufferLength)
+	{
+		_string[p + i] = '\0';
+	}
+}
+
+uint16_t DebugPrinter::SteppedTask_step()
+{
+#ifdef AVR
+	if (!(UCSR0A & (1 << UDRE0)))
+		return 20;
+	if (_pos < kBufferLength && _string[_pos])
+	{
+		UDR0 = _string[_pos];
+		++_pos;
+	}
+#else
+#if !defined(UNIT_TEST)
+	if (Serial.availableForWrite() < 1)
+		return 100;
+#endif
+	if (_pos < kBufferLength && _string[_pos])
+	{
+#if defined(UNIT_TEST)
+		putchar(_string[_pos]);
+#else
+		size_t length = strnlen(_string + _pos, kBufferLength - _pos);
+		if (length < kBufferLength - _pos && Serial.availableForWrite() > length)
+		{
+			Serial.print(_string + _pos);
+			_pos = kBufferLength;
+			return 100;
+		}
+		Serial.print(char(_string[_pos]));
+#endif
+		++_pos;
+	}
+#endif
+	return 100;
+}
+
 }

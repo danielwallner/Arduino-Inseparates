@@ -151,8 +151,10 @@ public:
   {
     if (bits != 16)
       return;
-    printer.print("Datalink86: ");
-    printer.println(String((uint32_t)data, HEX));
+    if (data >> 32)
+      printer.printf("Datalink86: 0x%lX%08lX %hd\n", long(data >> 32), long(data), short(bits));
+    else
+      printer.printf("Datalink86: 0x%lX %hd\n", long(data), short(bits));
 
     button_type_t button;
     decode_ir(BANG_OLUFSEN, 16, data >> 8, data, 0, &button);

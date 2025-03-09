@@ -7,10 +7,15 @@
 #include "FastTime.h"
 #include <stdarg.h>
 
+namespace inseparates
+{
+int Serial_printf(const char *format, ...);
+}
+
 #ifdef INS_DEBUGGING
-	void INS_DEBUGF(const char *format, ...);
+#	define INS_DEBUGF inseparates::Serial_printf
 	inline void INS_DEBUG(const char *s) { INS_DEBUGF("%s\n", s); }
-	inline void INS_DEBUG(uint8_t v, uint8_t b = 10) { INS_DEBUGF(b == 16 ? "%hhX\n" : "%hhu\n", v); }
+	inline void INS_DEBUG(uint8_t v, uint8_t b = 10) { INS_DEBUGF(b == 16 ? "%hX\n" : "%hu\n", short(v)); }
 	inline void INS_DEBUG(int v, uint8_t b = 10) { INS_DEBUGF(b == 16 ? "%X\n" : "%d\n", v); }
 	inline void INS_DEBUG(unsigned v, uint8_t b = 10) { INS_DEBUGF(b == 16 ? "%Xn" : "%u\n", v); }
 	inline void INS_DEBUG(long v, uint8_t b = 10) { INS_DEBUGF(b == 16 ? "%lX\n" : "%ld\n", v); }
@@ -47,114 +52,17 @@ class DebugPrinter : public SteppedTask
 {
 	static const uint8_t kBufferLength = 64;
 	char _string[kBufferLength];
-	uint8_t _pos = -1;
+	uint8_t _pos = kBufferLength;
 public:
-	int printf(const char *format, ...)
-	{
-		uint8_t p = 0;
-		if (_pos < kBufferLength && _string[_pos])
-		{
-			// Append
-			for (p = _pos; p < kBufferLength && _string[p]; ++p);
-		}
-		else
-		{
-			_pos = 0;
-		}
-		va_list argptr;
-		int ret;
-		va_start(argptr, format);
-		ret = vsnprintf(_string + p, kBufferLength - p, format, argptr);
-		va_end(argptr);
-		return ret;
-	}
-
-	void print(const char *string)
-	{
-		uint8_t p = 0;
-		if (_pos < kBufferLength && _string[_pos])
-		{
-			// Append
-			for (p = _pos;  p < kBufferLength && _string[p]; ++p);
-		}
-		else
-		{
-			_pos = 0;
-		}
-
-		uint8_t i = 0;
-		for (; p + i < kBufferLength && string[i]; ++i)
-		{
-			_string[p + i] = string[i];
-		}
-
-		if (p + i < kBufferLength)
-		{
-			_string[p + i] = '\0';
-		}
-	}
-
-	void println(const char *string)
-	{
-		uint8_t p = 0;
-		if (_pos < kBufferLength && _string[_pos])
-		{
-			// Append
-			for (p = _pos;  p < kBufferLength && _string[p]; ++p);
-		}
-		else
-		{
-			_pos = 0;
-		}
-
-		uint8_t i = 0;
-		for (; p + i < kBufferLength && i < string[i]; ++i)
-		{
-			_string[p + i] = string[i];
-		}
-
-		if (p + i + 1 < kBufferLength)
-		{
-			_string[p + i] = '\n';
-			_string[p + i + 1] = '\0';
-		}
-		else if (p + i < kBufferLength)
-		{
-			_string[p + i] = '\0';
-		}
-	}
-
-#ifndef UNIT_TEST
-	void print(const String &string) { print(string.c_str()); }
-	void println(const String &string) { println(string.c_str()); }
-#endif
+	int printf(const char *format, ...);
+	void print(const char *string);
+	void println(const char *string);
 
 	bool empty() const { return !(_pos < kBufferLength && _string[_pos]); }
 
 	void flush() { while(!empty()) SteppedTask_step(); }
 
-	uint16_t SteppedTask_step() override
-	{
-#ifdef AVR
-		if (!(UCSR0A & (1 << UDRE0)))
-			return 20;
-#endif
-		if (_pos < kBufferLength && _string[_pos])
-		{
-			char c = _string[_pos];
-#ifdef AVR
-			UDR0 = c;
-#else
-#ifndef UNIT_TEST
-			Serial.print(c);
-#else
-			putchar(c);
-#endif
-#endif
-			++_pos;
-		}
-		return 100;
-	}
+	uint16_t SteppedTask_step() override;
 };
 
 // Measures time between begin() to end() and end() to begin().
@@ -237,7 +145,7 @@ public:
 		maxInsideTime /= kFastCountsPerMicro;
 #endif
 
-		printer.printf("o%dm%d i%dm%d\n", meanOutsideTime, maxOutsideTime, meanInsideTime, maxInsideTime);
+		printer.printf("o%hdm%hd i%hdm%hd\n", short(meanOutsideTime), short(maxOutsideTime), short(meanInsideTime), short(maxInsideTime));
 		reset();
 	}
 
@@ -327,7 +235,7 @@ public:
 		maxTime /= kFastCountsPerMicro;
 #endif
 
-		printer.printf("c%dm%d\n", meanCycleTime, maxTime);
+		printer.printf("c%hdm%hd\n", short(meanCycleTime), short(maxTime));
 		reset();
 	}
 

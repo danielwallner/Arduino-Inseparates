@@ -146,7 +146,7 @@ public:
         case PHONO_START: message = 0x0E0A0001; break;
         case PHONO_STOP: message = 0x0E000001; break;
         }
-        printer.printf("IR: %ld %ld %lX\n", (int)_irmp_data.address, (int)_irmp_data.command, message);
+        printer.printf("IR: %ld %ld %lX\n", (long)_irmp_data.address, (long)_irmp_data.command, (long)message);
         if (message)
         {
           _txTechnicsSC.prepare(message);

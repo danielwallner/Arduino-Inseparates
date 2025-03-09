@@ -163,8 +163,8 @@ void loop()
   printer.print(pinstring);
 
 #if PRINT_ACCUMULATED_TIME
-  printer.printf("%lu %lu\n", time, accumulatedTime);
+  printer.printf("%lu %lu\n", long(time), long(accumulatedTime));
 #else
-  printer.printf("%lu\n", time);
+  printer.printf("%lu\n", long(time));
 #endif
 }

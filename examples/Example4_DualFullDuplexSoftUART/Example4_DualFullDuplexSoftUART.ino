@@ -133,7 +133,7 @@ public:
     }
     if (data != _receiveData)
     {
-      printer.printf("Did get: 0x%hhX != 0x%hhX\n", data, _receiveData);
+      printer.printf("Did get: 0x%hX != 0x%hX\n", short(data), short(_receiveData));
       scheduler.remove(&_rx);
     }
     ++_receiveData;
@@ -141,13 +141,13 @@ public:
 
   void RxUARTDelegate_timingError(uint8_t bus) override
   {
-    printer.printf("Timing Error at: %hhu\n", _sendData);
+    printer.printf("Timing Error at: %hX\n", short(_sendData));
     scheduler.remove(&_rx);
   }
 
   void RxUARTDelegate_parityError(uint8_t bus) override
   {
-    printer.printf("Parity Error at: %hhu\n", _sendData);
+    printer.printf("Parity Error at: %hX\n", short(_sendData));
     scheduler.remove(&_rx);
   }
 
@@ -156,7 +156,7 @@ public:
     if (!scheduler.active(&_rx))
       return;
 #if !DUAL_UARTS
-    printer.printf("%hhX\n", _sendData);
+    printer.printf("%hX\n", short(_sendData));
     printer.flush();
 #endif
     _tx.prepare(_sendData);

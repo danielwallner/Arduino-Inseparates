@@ -152,19 +152,17 @@ public:
   {
     // Printing to serial port in these callbacks is not ideal. DebugPrinter is better than Serial though.
     // Only do this for debugging and know it will affect the timing of tasks!
-    printer.printf("ESI data: %0lx%0lx bits: %hhu\n", uint32_t(data >> 32),  uint32_t(data), bits);
+    printer.printf("ESI data: %0lx%0lx bits: %hu\n", long(data >> 32),  long(data), short(bits));
   }
 
   void RxRC5Delegate_data(uint16_t data, uint8_t bus) override
   {
-    printer.print("RC5 data: ");
-    printer.println(String(data, HEX));
+    printer.printf("RC5 data: 0x%hX\n", short(data));
   }
 
   void RxTechnicsSCDelegate_data(uint32_t data) override
   {
-    printer.print("Technics SC: ");
-    printer.println(String(data, HEX));
+    printer.printf("Technics SC: 0x%lX\n", long(data));
   }
 
   // This is where everything that you normally put in loop() goes.
@@ -200,8 +198,7 @@ public:
       scheduler.add(&_txRC5);
 #endif
 #if !AVR
-      printer.print("Will send: ");
-      printer.println(String(encodedMessage, HEX));
+      printer.printf("Will send: 0x%lX\n", long(encodedMessage));
 #endif
     }
     return 10000;

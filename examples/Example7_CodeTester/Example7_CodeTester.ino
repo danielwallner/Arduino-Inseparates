@@ -117,7 +117,7 @@ public:
       default:
         return 10000;
       }
-      printer.printf("A:%hhd C%hhd\n", address, command);
+      printer.printf("A:%hd C%hd\n", short(address), short(command));
      }
     return 10000;
   }
