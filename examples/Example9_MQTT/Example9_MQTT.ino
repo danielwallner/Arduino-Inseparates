@@ -729,6 +729,24 @@ void handleJSON(const char* string, size_t length, ins_log_target_t target)
     return;
   }
 
+  {
+    const char* instance = doc["instance"];
+    if (instance)
+    {
+      if (strcmp(instance, instanceId.c_str()))
+      {
+#if INS_DEBUGGING
+        char logString[TMP_STRING_SIZE];
+        logString[0] = '\0';
+        size_t pos = strnnncat(logString, 0, TMP_STRING_SIZE, F("Ignoring message to "));
+        pos = strnnncat(logString, pos, TMP_STRING_SIZE, strVal);
+        logLine(logString, pos, target);
+#endif
+        return;
+      }
+    }
+  }
+
   for (JsonPair kv : doc.as<JsonObject>())
   {
     const __FlashStringHelper *errorMsg = nullptr;
@@ -779,21 +797,6 @@ void handleJSON(const char* string, size_t length, ins_log_target_t target)
       else if (kv.key() == "wipe")
       {
         config(true);
-      }
-      else if (strVal && kv.key() == "instance")
-      {
-        mustBeNum = false;
-        if (strcmp(strVal, instanceId.c_str()))
-        {
-#if INS_DEBUGGING
-          char logString[TMP_STRING_SIZE];
-          logString[0] = '\0';
-          size_t pos = strnnncat(logString, 0, TMP_STRING_SIZE, F("Ignoring message to "));
-          pos = strnnncat(logString, pos, TMP_STRING_SIZE, strVal);
-          logLine(logString, pos, target);
-#endif
-          return 0;
-        }
       }
       else if (kv.key() == "bus")
       {
