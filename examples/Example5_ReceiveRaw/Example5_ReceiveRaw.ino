@@ -125,7 +125,7 @@ void loop()
 #endif
 
 #if DEBUG_CYCLE_TIMING
-  if (timekeeper.secondsSinceReset(now) >= 5)
+  if (timekeeper.microsSinceReset(now) >= 5000000)
   {
     timekeeper.reset();
     printer.flush();
