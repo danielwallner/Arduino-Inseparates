@@ -2,10 +2,7 @@
 
 #include "Inseparates.h"
 #include "ProtocolUtils.h"
-
-#ifdef ARDUINO_ARCH_SAMD
-#include <SAMDTimerInterrupt.h>
-#endif
+#include "PlatformTimers.h"
 
 namespace inseparates
 {
@@ -71,6 +68,36 @@ INS_IRAM_ATTR void pinISR4() { pinISR(4); }
 INS_IRAM_ATTR void pinISR5() { pinISR(5); }
 INS_IRAM_ATTR void pinISR6() { pinISR(6); }
 INS_IRAM_ATTR void pinISR7() { pinISR(7); }
+#endif
+#endif
+
+#ifdef ARDUINO_ARCH_SAMD
+HWTimer::CallbackFunction HWTimer::s_callback;
+
+#if INS_USE_TC4
+extern "C" void TC4_Handler()
+{
+	if (TC4->COUNT16.INTFLAG.bit.MC0)
+	{
+		TC4->COUNT16.INTFLAG.reg = TC_INTFLAG_MC0;
+		if (HWTimer::s_callback)
+		{
+			HWTimer::s_callback();
+		}
+	}
+}
+#else
+extern "C" void TC3_Handler()
+{
+	if (TC3->COUNT16.INTFLAG.bit.MC0)
+	{
+		TC3->COUNT16.INTFLAG.reg = TC_INTFLAG_MC0;
+		if (HWTimer::s_callback)
+		{
+			HWTimer::s_callback();
+		}
+	}
+}
 #endif
 #endif
 
