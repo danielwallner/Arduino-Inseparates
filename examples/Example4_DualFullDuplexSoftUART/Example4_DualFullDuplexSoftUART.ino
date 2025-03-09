@@ -37,21 +37,28 @@ static const uint8_t D_7  = 7;
 #define DEBUG_FULL_TIMING 0
 #define DEBUG_CYCLE_TIMING 1
 #define DEBUG_DRY_TIMING 0
-#if AVR || ARDUINO_ARCH_SAMD
-#define ENABLE_READ_INTERRUPTS false // Not working
-#define ENABLE_WRITE_TIMER 0 // Not supported on AVR
+#if defined(AVR) || defined(ARDUINO_ARCH_SAMD)
+#define ENABLE_READ_INTERRUPTS false // Not working (Figure out why)
 #else
 #define ENABLE_READ_INTERRUPTS true
+#endif
+#if AVR
+#define ENABLE_WRITE_TIMER 0 // Not supported on AVR
+#else
 #define ENABLE_WRITE_TIMER 1
 #endif
 
 #if defined(AVR)
 #define DUAL_UARTS 0 // Also enables more debug output.
-const uint32_t baudRate = 2400;
 #else
 #define DUAL_UARTS 1
+#endif
+#if defined(AVR) || defined(ARDUINO_ARCH_SAMD)
+const uint32_t baudRate = 2400;
+#else
 const uint32_t baudRate = 4800;
 #endif
+
 const uint16_t kUART1Pin = D_2;
 const uint16_t kUART2Pin = D_3;
 
