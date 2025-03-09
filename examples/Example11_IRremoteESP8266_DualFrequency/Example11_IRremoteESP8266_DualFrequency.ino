@@ -13,6 +13,7 @@
 #define INS_FAST_TIME 1
 #define DEBUG_FULL_TIMING 0
 #define DEBUG_CYCLE_TIMING 0
+#define ENABLE_READ_INTERRUPTS true
 
 #include <Arduino.h>
 #include <IRremoteESP8266.h>
@@ -201,7 +202,7 @@ void setup()
   scheduler.begin();
   scheduler.add(&printer);
 
-  scheduler.add(&datalink86Decoder, kDatalink86RecvPin);
+  scheduler.add(&datalink86Decoder, kDatalink86RecvPin, ENABLE_READ_INTERRUPTS);
 }
 
 void loop()

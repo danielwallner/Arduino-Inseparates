@@ -7,7 +7,8 @@
 #define DEBUG_CYCLE_TIMING 0
 #define DEBUG_DRY_TIMING 0
 
-#define HW_PWM 1 // Will use timer 2 on AVR.
+#define ENABLE_READ_INTERRUPTS true
+#define HW_PWM 1 // Will use timer 1 or 2 on AVR.
 #define SW_PWM 0 // Define HW_PWM or SW_PWM to modulate the IR output. Direct pin loopback will not work with a modulated output.
 #define SEND_ESI 0
 #define SEND_TECHNICS_SC 0
@@ -138,8 +139,8 @@ public:
 #if SW_PWM && !HW_PWM
     scheduler.add(&irPinWriter);
 #endif
-    scheduler.add(&_esiDecoder, kESIRecvPin);
-    scheduler.add(&_rc5Decoder, kRC5RecvPin);
+    scheduler.add(&_esiDecoder, kESIRecvPin, ENABLE_READ_INTERRUPTS);
+    scheduler.add(&_rc5Decoder, kRC5RecvPin, ENABLE_READ_INTERRUPTS);
     scheduler.add(&_technicsDecoder);
 #if SEND_TECHNICS_SC && !SEND_ESI
     // TxTechnicsSC must unlike other encoders always be active.

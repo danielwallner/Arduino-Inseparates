@@ -6,6 +6,7 @@
 #define INS_FAST_TIME 1
 #define DEBUG_FULL_TIMING 0
 #define DEBUG_CYCLE_TIMING 1
+#define ENABLE_READ_INTERRUPTS false
 
 #include <Inseparates.h>
 #include <DebugUtils.h>
@@ -103,7 +104,7 @@ void setup()
   scheduler.add(&printer);
 #endif
 
-  scheduler.add(&datalink86Decoder, kDatalink86RecvPin);
+  scheduler.add(&datalink86Decoder, kDatalink86RecvPin, ENABLE_READ_INTERRUPTS);
 }
 
 void loop()

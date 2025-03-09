@@ -15,6 +15,7 @@
 //#define DEBUG_FULL_TIMING 1
 //#define DEBUG_CYCLE_TIMING 1
 //#define DEBUG_PRINTS 1
+#define ENABLE_READ_INTERRUPTS false
 #define SEND_ON_NON_REPEAT 1
 //#define USE_IRREMOTE 1
 #define IR_RECEIVE_POLL_INTERVAL 1000 // Once every millisecond.
@@ -161,7 +162,7 @@ public:
 #if USE_IRREMOTE
     IrReceiver.begin(kRC5Pin, false);
 #else
-    scheduler.add(&_rxNEC, kRC5Pin);
+    scheduler.add(&_rxNEC, kRC5Pin, ENABLE_READ_INTERRUPTS);
 #endif
   }
 

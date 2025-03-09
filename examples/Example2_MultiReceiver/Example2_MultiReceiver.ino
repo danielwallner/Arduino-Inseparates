@@ -6,6 +6,7 @@
 #define DEBUG_FULL_TIMING 0
 #define DEBUG_CYCLE_TIMING 0
 #define DEBUG_DRY_TIMING 0
+#define ENABLE_READ_INTERRUPTS false
 
 #include <Inseparates.h>
 #include <DebugUtils.h>
@@ -194,16 +195,16 @@ void setup()
 
 #if !AVR
   // AVR cannot reliably handle all protocols at the same time.
-  scheduler.add(&beo36Decoder, kBeo36RecvPin);
-  scheduler.add(&datalink80Decoder, kDatalink80RecvPin);
-  scheduler.add(&datalink86Decoder, kDatalink86RecvPin);
+  scheduler.add(&beo36Decoder, kBeo36RecvPin, ENABLE_READ_INTERRUPTS);
+  scheduler.add(&datalink80Decoder, kDatalink80RecvPin, ENABLE_READ_INTERRUPTS);
+  scheduler.add(&datalink86Decoder, kDatalink86RecvPin, ENABLE_READ_INTERRUPTS);
   pinMode(kESIRecvPin, INPUT); // To turn off pull-up
-  scheduler.add(&esiDecoder, kESIRecvPin);
+  scheduler.add(&esiDecoder, kESIRecvPin, ENABLE_READ_INTERRUPTS);
   scheduler.add(&technicsDecoder);
 #endif
-  scheduler.add(&necDecoder, kNECRecvPin);
-  scheduler.add(&rc5Decoder, kRC5RecvPin);
-  scheduler.add(&sircDecoder, kSIRCRecvPin);
+  scheduler.add(&necDecoder, kNECRecvPin, ENABLE_READ_INTERRUPTS);
+  scheduler.add(&rc5Decoder, kRC5RecvPin, ENABLE_READ_INTERRUPTS);
+  scheduler.add(&sircDecoder, kSIRCRecvPin, ENABLE_READ_INTERRUPTS);
 }
 
 void loop()
