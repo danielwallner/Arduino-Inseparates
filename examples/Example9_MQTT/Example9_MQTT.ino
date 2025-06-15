@@ -752,6 +752,11 @@ void handleJSON(const char* string, size_t length, ins_log_target_t target)
     const __FlashStringHelper *errorMsg = nullptr;
     auto decode = [&message, &kv, &errorMsg, target]()
     {
+      if (kv.key() == "instance")
+      {
+        return 0;
+      }
+
       const char *strVal = nullptr;
       int64_t intVal = 0;
       bool isNum = false;
